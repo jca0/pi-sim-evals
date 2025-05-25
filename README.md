@@ -26,3 +26,9 @@ Install extra dependencies
 ./submodules/IsaacLab/isaaclab.sh -i
 ```
 
+## Quick Start
+With environment active run:
+```
+python main.py  
+```
+
