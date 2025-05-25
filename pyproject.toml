@@ -12,6 +12,7 @@ dependencies = [
   "tyro>=0.9.21",
   "openpi-client",
   "mediapy>=1.2.4",
+  "numba>=0.61.2",
 ]
 
 [tool.uv.sources]
