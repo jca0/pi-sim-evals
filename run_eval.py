@@ -34,6 +34,7 @@ from src.inference.droid_jointpos import Client as DroidJointPosClient
 def main(
         episodes = 10,
         headless: bool = True,
+        scene: int = 1,
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -57,9 +58,22 @@ def main(
         num_envs=1,
         use_fabric=True,
     )
+    instruction = None
+    match scene:
+        case 1:
+            instruction = "put the marker in the mug"
+        case 2:
+            instruction = "put the cube in the bowl"
+        case 3:
+            instruction = "put banana on the box"
+        case _:
+            raise ValueError(f"Scene {scene} not supported")
+        
+    env_cfg.set_scene(scene)
     env = gym.make("DROID", cfg=env_cfg)
     obs, _ = env.reset()
     client = DroidJointPosClient()
+
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
@@ -69,7 +83,7 @@ def main(
     with torch.no_grad():
         for ep in range(episodes):
             for _ in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
-                ret = client.infer(obs, "put the banana in the bowl")
+                ret = client.infer(obs, "put the marker in the mug")
                 if not headless:
                     cv2.imshow("Right Camera", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)

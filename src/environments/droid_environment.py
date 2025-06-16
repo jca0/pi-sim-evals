@@ -34,35 +34,10 @@ class SceneCfg(InteractiveSceneCfg):
         init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, -0.6, 0.7)),
     )
 
-    scene = AssetBaseCfg(
-            prim_path="{ENV_REGEX_NS}/scene",
-            spawn = sim_utils.UsdFileCfg(
-                usd_path=str(DATA_PATH / "nvidia_scene/mesh.usd"),
-                activate_contact_sensors=False,
-                ),
-            )
-
-    banana = RigidObjectCfg(
-            prim_path="{ENV_REGEX_NS}/scene/banana",
-            spawn=None,
-            init_state=RigidObjectCfg.InitialStateCfg(
-                pos=(0.35, 0.19, 0.08),
-                rot=(1.0, 0.0, 0.0, 0.0),
-                )
-            )
-    bowl = RigidObjectCfg(
-            prim_path="{ENV_REGEX_NS}/scene/bowl",
-            spawn=None,
-            init_state=RigidObjectCfg.InitialStateCfg(
-                pos=(0.33, -0.1, 0.11),
-                rot=(0.67, -0.74, 0.0, 0.0), 
-                )
-            )
-
     robot = ArticulationCfg(
         prim_path="{ENV_REGEX_NS}/robot",
         spawn=sim_utils.UsdFileCfg(
-            usd_path=str(DATA_PATH / "my_droid.usdz"),
+            usd_path=str(DATA_PATH / "droid.usdz"),
             activate_contact_sensors=False,
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 disable_gravity=True,
@@ -157,6 +132,15 @@ class SceneCfg(InteractiveSceneCfg):
             pos=(0.011, -0.031, -0.074), rot=(-0.420, 0.570, 0.576, -0.409), convention="opengl"
         ),
     )
+
+    def dynamic_scene(self, scene_name: str):
+        scene = AssetBaseCfg(
+                prim_path="{ENV_REGEX_NS}/scene",
+                spawn = sim_utils.UsdFileCfg(
+                    usd_path=str(DATA_PATH / f"scene{scene_name}.usd"),
+                    ),
+                )
+        self.scene = scene
 
 class BinaryJointPositionZeroToOneAction(BinaryJointPositionAction):
     # override
@@ -381,14 +365,19 @@ class EnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 1 / (60 * 2)
         self.sim.render_interval = 4 * 2
 
+        self.sim.physx.enable_ccd = True
         self.sim.physx.gpu_temp_buffer_capacity = 2**30
         self.sim.physx.gpu_heap_capacity = 2**30
         self.sim.physx.gpu_collision_stack_size = 2**30
         self.rerender_on_reset = True
 
+
         # self.sim.render.enable_reflections = False
         # self.sim.render.enable_shadows = False
         # self.sim.render.enable_direct_lighting = False
         # self.sim.render.enable_ambient_occlusion = False
+    
+    def set_scene(self, scene_name: str):
+        self.scene.dynamic_scene(scene_name)
 
 
