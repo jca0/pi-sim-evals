@@ -9,7 +9,7 @@ Then, in a separate terminal, launch the policy server on localhost:8000
 -- make sure to set XLA_PYTHON_CLIENT_MEM_FRACTION to avoid JAX hogging all the GPU memory.
 
 For example, to launch a pi0-FAST-DROID policy (with joint position control), 
-run the command below in a separate terminal from the submodules/openpi directory:
+run the command below in a separate terminal from the openpi "karl/droid_policies" branch:
 
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi0_fast_droid_jointpos --policy.dir=s3://openpi-assets-simeval/pi0_fast_droid_jointpos
 
@@ -61,17 +61,19 @@ def main(
     instruction = None
     match scene:
         case 1:
-            instruction = "put the marker in the mug"
-        case 2:
             instruction = "put the cube in the bowl"
+        case 2:
+            instruction = "put the can in the mug"
         case 3:
-            instruction = "put banana on the box"
+            instruction = "put banana in the bin"
         case _:
             raise ValueError(f"Scene {scene} not supported")
         
     env_cfg.set_scene(scene)
     env = gym.make("DROID", cfg=env_cfg)
+
     obs, _ = env.reset()
+    obs, _ = env.reset() # need second render cycle to get correctly loaded materials
     client = DroidJointPosClient()
 
 

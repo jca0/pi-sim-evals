@@ -4,7 +4,17 @@ This repository contains scripts for evaluating DROID policies in a simple ISAAC
 
 Here is an example rollout of a pi0-FAST-DROID policy:
 
-![Example Rollout](./docs/droid_rollout.gif)
+Scene 1
+
+![Scene 1](./docs/scene1.gif)
+
+Scene 2
+
+![Scene 2](./docs/scene2.gif)
+
+Scene 3
+
+![Scene 3](./docs/scene3.gif)
 
 The simulation is tuned to work *zero-shot* with DROID policies trained on the real-world DROID dataset, so no separate simulation data is required.
 
@@ -48,7 +58,7 @@ unzip assets.zip
 
 Then, in a separate terminal, launch the policy server on `localhost:8000`. 
 For example, to launch a pi0-FAST-DROID policy (with joint position control),
-change to the `submodules/openpi` directory and run the command below in a separate terminal
+checkout openpi to the `karl/droid_policies` branch and run the command below in a separate terminal
 ```bash
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi0_fast_droid_jointpos --policy.dir=s3://openpi-assets-simeval/pi0_fast_droid_jointpos
 ```
@@ -57,6 +67,25 @@ XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 uv run scripts/serve_policy.py policy:checkpo
 
 Finally, run the evaluation script:
 ```bash
-python run_eval.py --episodes 10 --headless
+python run_eval.py --episodes [INT] --scene [INT] --headless
 ```
 
+## Minimal Example
+
+```python
+env_cfg.set_scene(scene) # pass scene integer
+env = gym.make("DROID", cfg=env_cfg)
+
+obs, _ = env.reset()
+obs, _ = env.reset() # need second render cycle to get correctly loaded materials
+client = # Your policy of choice
+
+max_steps = env.env.max_episode_length
+for _ in tqdm(range(max_steps), desc=f"Episode"):
+    action = client.infer(obs, INSTRUCTION) # calling inference on your policy
+    action = torch.tensor(ret["action"])[None]
+    obs, _, term, trunc, _ = env.step(action)
+    if term or trunc:
+        break
+env.close()
+```
