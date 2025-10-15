@@ -28,7 +28,7 @@ The simulation is tuned to work *zero-shot* with DROID policies trained on the r
 
 Clone the repo
 ```bash
-git clone --recurse-submodules git@github.com:arhanjain/sim-evals.git
+git clone --recurse-submodules git@github.com:jca0/pi-sim-evals.git
 cd sim-evals
 ```
 
