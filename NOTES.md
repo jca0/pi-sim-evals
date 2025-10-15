@@ -14,3 +14,7 @@ python scripts/serve_policy.py --port 8000 \
 # pi-sim-eval notes
 - you can't run it on a mac, it needs CUDA 12.xx
 - added IsaacSim submodule to repo
+
+# ec2 instance
+- g6.xlarge (16GiB), should probably use 32GiB
+- 200GiB SSD
