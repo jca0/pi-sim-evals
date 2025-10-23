@@ -18,6 +18,7 @@ class Client(InferenceClient):
 
         self.actions_from_chunk_completed = 0
         self.pred_action_chunk = None
+        self.is_first_inference = 
 
     def visualize(self, request: dict):
         """
