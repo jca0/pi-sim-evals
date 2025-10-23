@@ -2,6 +2,7 @@ import tyro
 import numpy as np
 from PIL import Image
 from openpi_client import websocket_client_policy, image_tools
+# from openpi.src.openpi import transforms as _transforms
 
 from .abstract_client import InferenceClient
 
@@ -10,14 +11,29 @@ class Client(InferenceClient):
                 remote_host:str = "localhost", 
                 remote_port:int = 8000,
                 open_loop_horizon:int = 8,
+                use_absolute_actions:bool = False,
                  ) -> None:
         self.open_loop_horizon = open_loop_horizon
         self.client = websocket_client_policy.WebsocketClientPolicy(
             remote_host, remote_port
         )
-
+        self.use_absolute_actions = use_absolute_actions
+        
         self.actions_from_chunk_completed = 0
         self.pred_action_chunk = None
+
+    def _integrate_velocities_to_positions(self, velocity_actions, current_state):
+        """
+        Convert velocity/delta actions to absolute positions.
+        For joints (first 7 dims): integrate velocities by cumulative sum + current state
+        For gripper (last dim): keep as-is (already absolute)
+        """
+        joint_velocities = velocity_actions[:, :7]
+        gripper_actions = velocity_actions[:, 7:]
+        current_joint_pos = current_state[:7]
+        absolute_joint_positions = np.cumsum(joint_velocities, axis=0) + current_joint_pos[np.newaxis, :]
+        absolute_actions = np.concatenate([absolute_joint_positions, gripper_actions], axis=1)
+        return absolute_actions
 
     def visualize(self, request: dict):
         """
@@ -55,6 +71,13 @@ class Client(InferenceClient):
                 "prompt": instruction,
             }
             self.pred_action_chunk = self.client.infer(request_data)["actions"]
+
+        if self.use_absolute_actions:
+            current_state = np.concatenate([
+                curr_obs["joint_position"],
+                curr_obs["gripper_position"]
+            ])
+            self.pred_action_chunk = self._integrate_velocities_to_positions(self.pred_action_chunk, current_state)
 
         action = self.pred_action_chunk[self.actions_from_chunk_completed]
         self.actions_from_chunk_completed += 1
