@@ -59,6 +59,12 @@ class Client(InferenceClient):
         action = self.pred_action_chunk[self.actions_from_chunk_completed]
         self.actions_from_chunk_completed += 1
 
+        # NEW EDITS #
+        dt = 1.0/15.0
+        action = action.copy()
+        action[:-1] = curr_obs["joint_position"] + action[:-1] * dt
+        # END NEW EDITS #
+
         # binarize gripper action
         if action[-1].item() > 0.5:
             action = np.concatenate([action[:-1], np.ones((1,))])
