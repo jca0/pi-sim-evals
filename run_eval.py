@@ -66,6 +66,8 @@ def main(
             instruction = "put the can in the mug"
         case 3:
             instruction = "put banana in the bin"
+        case 4:
+            instruction = "grab the black marker"
         case _:
             raise ValueError(f"Scene {scene} not supported")
         
