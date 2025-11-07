@@ -29,7 +29,7 @@ The simulation is tuned to work *zero-shot* with DROID policies trained on the r
 Clone the repo
 ```bash
 git clone --recurse-submodules git@github.com:jca0/pi-sim-evals.git
-cd sim-evals
+cd pi-sim-evals
 ```
 
 Install uv (see: https://github.com/astral-sh/uv#installation)
