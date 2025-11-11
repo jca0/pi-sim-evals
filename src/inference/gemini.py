@@ -2,8 +2,22 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 import os
+import cv2
+import json
 
 load_dotenv()
+
+def parse_json(json_output):
+  # Parsing out the markdown fencing
+  lines = json_output.splitlines()
+  for i, line in enumerate(lines):
+    if line == "```json":
+      # Remove everything before "```json"
+      json_output = "\n".join(lines[i + 1 :])
+      # Remove everything after the closing "```"
+      json_output = json_output.split("```")[0]
+      break  # Exit the loop once "```json" is found
+  return json_output
 
 # Initialize the GenAI client and specify the model
 MODEL_ID = "gemini-robotics-er-1.5-preview"
@@ -17,7 +31,8 @@ PROMPT = """
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # Load your image
-with open("test_imgs/exterior_img.png", 'rb') as f:
+image = cv2.imread("test_imgs/exterior_img.png")
+with open("./test_imgs/exterior_img.png", 'rb') as f:
     image_bytes = f.read()
 
 image_response = client.models.generate_content(
@@ -36,3 +51,14 @@ image_response = client.models.generate_content(
 )
 
 print(image_response.text)
+output = parse_json(image_response.text)
+print(output)
+
+# create new image with the points annotated
+annotated_image = image.copy()
+for item in output:
+  print(item)
+  cv2.circle(annotated_image, (item['point'][1], item['point'][0]), 10, (0, 0, 255), 2)
+  cv2.putText(annotated_image, item['label'], (item['point'][1], item['point'][0]), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
+
+cv2.imwrite("annotated_image.png", annotated_image)
