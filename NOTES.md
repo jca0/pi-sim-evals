@@ -27,3 +27,6 @@ uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi05_droid --po
 - g6.2xlarge (32GiB)
 - 200GiB SSD
 - sudo apt install ffmpeg, unzip
+
+# todos:
+- [scene4.usd](assets/scene4.usd) has incorrect collision boundaries for mug and cube is incorrectly initialized
