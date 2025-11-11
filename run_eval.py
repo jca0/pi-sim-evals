@@ -67,7 +67,7 @@ def main(
         case 3:
             instruction = "put banana in the bin"
         case 4: 
-            instruction = "put the mug on the sugar box"
+            instruction = "put the meat can on the sugar box"
         case 5:
             instruction = "rearrange the cubes so that they spell 'REX'"
         case 6:
@@ -76,6 +76,7 @@ def main(
             raise ValueError(f"Scene {scene} not supported")
         
     env_cfg.set_scene(scene)
+    env_cfg.episode_length_s = 30.0 # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
 
     obs, _ = env.reset()
