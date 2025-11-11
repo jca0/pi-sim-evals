@@ -10,6 +10,8 @@ dependencies = [
   "openpi-client",
   "isaaclab[all,isaacsim]==2.2.0",
   "tyro>=0.9.17",
+  "google>=3.0.0",
+  "generativeai>=0.0.1",
 ]
 
 [tool.uv.sources]
