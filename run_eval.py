@@ -67,7 +67,11 @@ def main(
         case 3:
             instruction = "put banana in the bin"
         case 4:
-            instruction = "grab the black marker"
+            instruction = "put the cube on the sugar box"
+        case 5:
+            instruction = "rearrange the cubes so that they spell 'REX'"
+        case 6:
+            instruction = "stack all the cubes on top of each other"
         case _:
             raise ValueError(f"Scene {scene} not supported")
         
