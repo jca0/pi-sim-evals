@@ -1,11 +1,10 @@
 import tyro
 import numpy as np
-import cv2
 from PIL import Image
 from openpi_client import websocket_client_policy, image_tools
 import os
-# from openpi.src.openpi import transforms as _transforms
-
+import cv2
+from .gemini_helpers import query_gemini, scale_bounding_boxes, plot_bounding_boxes, convert_np_to_bytes
 from .abstract_client import InferenceClient
 
 class Client(InferenceClient):
@@ -21,14 +20,18 @@ class Client(InferenceClient):
         
         self.actions_from_chunk_completed = 0
         self.pred_action_chunk = None
+        self.inference_count = 0
 
     def _annotate_images(self, exterior_img, wrist_img):
         """
-        Specific for 'can in mug' task. 
-        Annotates the images with the can and mug locations.
+        Annotates images with bounding boxes of objects detected by Gemini.
         """
-        exterior_annotated = exterior_img.copy()
-        wrist_annotated = wrist_img.copy()
+        exterior_json = query_gemini(convert_np_to_bytes(exterior_img))
+        wrist_json = query_gemini(convert_np_to_bytes(wrist_img))
+        scaled_exterior_json = scale_bounding_boxes(exterior_json, exterior_img)
+        scaled_wrist_json = scale_bounding_boxes(wrist_json, wrist_img)
+        exterior_annotated = plot_bounding_boxes(exterior_img, scaled_exterior_json)
+        wrist_annotated = plot_bounding_boxes(wrist_img, scaled_wrist_json)
 
         return exterior_annotated, wrist_annotated
 
@@ -57,24 +60,32 @@ class Client(InferenceClient):
         ):
             self.actions_from_chunk_completed = 0
 
-            exterior_img = image_tools.resize_with_pad(curr_obs["right_image"], 224, 224)
-            wrist_img = image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224)
+            exterior_annotated, wrist_annotated = self._annotate_images(curr_obs["right_image"], curr_obs["wrist_image"])
+
+            exterior_annotated_resized = image_tools.resize_with_pad(exterior_annotated, 224, 224)
+            wrist_annotated_resized = image_tools.resize_with_pad(wrist_annotated, 224, 224)
+
+            cv2.imwrite(f"test_imgs/right_image_{self.inference_count}.png", cv2.cvtColor(exterior_annotated_resized, cv2.COLOR_RGB2BGR))
+            cv2.imwrite(f"test_imgs/wrist_image_{self.inference_count}.png", cv2.cvtColor(wrist_annotated_resized, cv2.COLOR_RGB2BGR))
 
             request_data = {
-                "observation/exterior_image_1_left": exterior_img,
-                "observation/wrist_image_left": wrist_img,
+                "observation/exterior_image_1_left": exterior_annotated_resized,
+                "observation/wrist_image_left": wrist_annotated_resized,
                 "observation/joint_position": curr_obs["joint_position"],
                 "observation/gripper_position": curr_obs["gripper_position"],
                 "prompt": instruction,
             }
             pred_chunk = self.client.infer(request_data)["actions"] # velocities
             pred_chunk = pred_chunk.copy()
+
             # convert velocities to joint positions
             dt = 1.0/15.0
             pred_chunk[:, :-1] *= dt
             pred_chunk[:, :-1] = np.cumsum(pred_chunk[:, :-1], axis=0)
             pred_chunk[:, :-1] += curr_obs["joint_position"]
             self.pred_action_chunk = pred_chunk
+
+            self.inference_count += 1
 
         action = self.pred_action_chunk[self.actions_from_chunk_completed]
         self.actions_from_chunk_completed += 1
