@@ -11,6 +11,10 @@ load_dotenv()
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 MODEL_ID = "gemini-robotics-er-1.5-preview"
 
+def convert_np_to_bytes(image):
+    _, image_bytes = cv2.imencode('.png', image)
+    return image_bytes.tobytes()
+
 def parse_json(json_output):
   # Parsing out the markdown fencing
   lines = json_output.splitlines()
@@ -92,4 +96,3 @@ def plot_bounding_boxes(image, json_output):
         cv2.putText(annotated_image, label, (x1, y2 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
 
     return annotated_image
-    
