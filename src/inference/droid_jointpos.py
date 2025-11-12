@@ -4,7 +4,7 @@ from PIL import Image
 from openpi_client import websocket_client_policy, image_tools
 import os
 import cv2
-from .gemini_helpers import query_gemini, scale_bounding_boxes, plot_bounding_boxes, convert_np_to_bytes
+from .gemini_helpers import query_gemini, scale_bounding_boxes, plot_bounding_boxes, convert_np_to_bytes, scale_points, plot_points
 from .abstract_client import InferenceClient
 
 class Client(InferenceClient):
@@ -28,10 +28,14 @@ class Client(InferenceClient):
         """
         exterior_json = query_gemini(convert_np_to_bytes(exterior_img))
         wrist_json = query_gemini(convert_np_to_bytes(wrist_img))
-        scaled_exterior_json = scale_bounding_boxes(exterior_json, exterior_img)
-        scaled_wrist_json = scale_bounding_boxes(wrist_json, wrist_img)
-        exterior_annotated = plot_bounding_boxes(exterior_img, scaled_exterior_json)
-        wrist_annotated = plot_bounding_boxes(wrist_img, scaled_wrist_json)
+        # scaled_exterior_json = scale_bounding_boxes(exterior_json, exterior_img)
+        # scaled_wrist_json = scale_bounding_boxes(wrist_json, wrist_img)
+        # exterior_annotated = plot_bounding_boxes(exterior_img, scaled_exterior_json)
+        # wrist_annotated = plot_bounding_boxes(wrist_img, scaled_wrist_json)
+        scaled_exterior_json = scale_points(exterior_json, exterior_img)
+        scaled_wrist_json = scale_points(wrist_json, wrist_img)
+        exterior_annotated = plot_points(exterior_img, scaled_exterior_json)
+        wrist_annotated = plot_points(wrist_img, scaled_wrist_json)
 
         return exterior_annotated, wrist_annotated
 
@@ -61,9 +65,10 @@ class Client(InferenceClient):
             self.actions_from_chunk_completed = 0
 
             exterior_annotated, wrist_annotated = self._annotate_images(curr_obs["right_image"], curr_obs["wrist_image"])
-
-            exterior_annotated_resized = image_tools.resize_with_pad(exterior_annotated, 224, 224)
-            wrist_annotated_resized = image_tools.resize_with_pad(wrist_annotated, 224, 224)
+            # exterior_annotated = curr_obs["right_image"]
+            # wrist_annotated = curr_obs["wrist_image"]
+            exterior_annotated_resized = image_tools.resize_with_pad(exterior_annotated, 448, 448)
+            wrist_annotated_resized = image_tools.resize_with_pad(wrist_annotated, 448, 448)
 
             cv2.imwrite(f"test_imgs/right_image_{self.inference_count}.png", cv2.cvtColor(exterior_annotated_resized, cv2.COLOR_RGB2BGR))
             cv2.imwrite(f"test_imgs/wrist_image_{self.inference_count}.png", cv2.cvtColor(wrist_annotated_resized, cv2.COLOR_RGB2BGR))
