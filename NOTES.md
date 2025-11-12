@@ -21,12 +21,20 @@ uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi05_droid --po
 - you can't run it on a mac, it needs CUDA 12.xx
 - added IsaacSim submodule to repo
 - `. .venv/bin/activate`
-- `python3 run_eval.py --episodes 1 --scene 1 --headless`
+- `python3 run_eval.py --episodes 1 --scene 4 --headless`
 
 # ec2 instance
 - g6.2xlarge (32GiB)
 - 200GiB SSD
 - sudo apt install ffmpeg, unzip
 
-# todos:
-- [scene4.usd](assets/scene4.usd) has incorrect collision boundaries for mug and cube is incorrectly initialized
+# if JAX error, clear cache:
+```
+rm -rf ~/.cache/jax
+rm -rf ~/.cache/xla
+```
+
+# todos/ideas:
+- only annotate objects useful to task
+- don't annotate objects at every inference frame, it gets in the way of the observations
+- occasionally reprompt task
