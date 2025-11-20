@@ -98,10 +98,10 @@ def plot_points(image, json_output):
     for item in json_output:
         y, x = item['point']
         label = item['label']
-        cv2.circle(annotated_image, (x, y), 5, (0, 0, 255), -1)
-        text_width, text_height = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.75, 2)[0]
-        cv2.rectangle(annotated_image, (x + 5, y - text_height), (x + text_width, y), (0, 0, 0), -1)
-        cv2.putText(annotated_image, label, (x + 5, y ), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
+        cv2.circle(annotated_image, (x, y), 5, (0, 255, 255), -1)
+        text_width, text_height = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
+        cv2.rectangle(annotated_image, (x + 8, y - text_height), (x + text_width, y), (0, 0, 0), -1)
+        cv2.putText(annotated_image, label, (x + 8, y ), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
     return annotated_image
 
 def plot_bounding_boxes(image, json_output):
