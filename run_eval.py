@@ -49,6 +49,7 @@ def main(
     # All IsaacLab dependent modules should be imported after the app is launched
     import src.environments # noqa: F401
     from isaaclab_tasks.utils import parse_env_cfg
+    from src.inference.state_checker import get_checker
 
 
     # Initialize the env
@@ -82,6 +83,7 @@ def main(
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
     client = DroidJointPosClient(open_loop_horizon=15)
+    task_checker = get_checker(scene)
 
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
@@ -91,6 +93,7 @@ def main(
     max_steps = env.env.max_episode_length
     with torch.no_grad():
         for ep in range(episodes):
+            task_completed = False
             for _ in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
                 if not headless:
@@ -99,6 +102,16 @@ def main(
                 video.append(ret["viz"])
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
+
+                if not task_completed:
+                    try:
+                        is_complete = task_checker.check(env.env)
+                        if is_complete:
+                            task_completed = True
+                            print("TASK COMPLETED")
+                            term = True
+                    except Exception as e:
+                        print(f"Error checking task completion: {e}")
                 if term or trunc:
                     break
 

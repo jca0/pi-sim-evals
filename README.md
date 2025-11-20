@@ -1,5 +1,12 @@
 # DROID Sim Evaluation
 
+**This branch is for pi0.5 droid policy.**
+
+Run the pi0.5 server:
+```bash
+uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi05_droid --policy.dir=gs://openpi-assets/checkpoints/pi05_droid
+```
+
 **LATEST COMMIT MAY HAVE A PHYSIC/FRICTION ISSUE**
 Roll back to commit before latest PR for temporary hack fix until I get time to fix this...
 
