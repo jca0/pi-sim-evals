@@ -85,7 +85,6 @@ def main(
     client = DroidJointPosClient(open_loop_horizon=15)
     task_checker = get_checker(scene)
 
-
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
     video = []
@@ -94,7 +93,7 @@ def main(
     with torch.no_grad():
         for ep in range(episodes):
             task_completed = False
-            for _ in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
+            for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
                 if not headless:
                     cv2.imshow("Right Camera", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
@@ -103,15 +102,13 @@ def main(
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
 
-                if not task_completed:
-                    try:
-                        is_complete = task_checker.check(env.env)
-                        if is_complete:
-                            task_completed = True
-                            print("TASK COMPLETED")
-                            term = True
-                    except Exception as e:
-                        print(f"Error checking task completion: {e}")
+                # call gemini checker on obs dictionary
+
+                if i % 10 == 0 and not task_completed:
+                    task_completed = task_checker.check(env.env)
+                    if task_completed:
+                        print("TASK COMPLETED")
+                        term = True
                 if term or trunc:
                     break
 

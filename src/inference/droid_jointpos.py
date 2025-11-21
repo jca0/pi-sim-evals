@@ -72,8 +72,8 @@ class Client(InferenceClient):
             #     cv2.imwrite(f"test_imgs/right_image_{self.inference_count}.png", cv2.cvtColor(exterior_annotated_resized, cv2.COLOR_RGB2BGR))
             #     cv2.imwrite(f"test_imgs/wrist_image_{self.inference_count}.png", cv2.cvtColor(wrist_annotated_resized, cv2.COLOR_RGB2BGR))
             # else:
-            #     exterior_annotated_resized = image_tools.resize_with_pad(curr_obs["right_image"], 224, 224)
-            #     wrist_annotated_resized = image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224)
+            exterior_annotated_resized = image_tools.resize_with_pad(curr_obs["right_image"], 224, 224)
+            wrist_annotated_resized = image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224)
             
             request_data = {
                 "observation/exterior_image_1_left": exterior_annotated_resized,
