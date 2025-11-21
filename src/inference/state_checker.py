@@ -9,6 +9,7 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 import os
+from src.inference.gemini_helpers import convert_np_to_bytes, parse_json
 
 load_dotenv()
 
@@ -50,27 +51,11 @@ def check_object_in_container(
 
     return in_container
 
-def gemini_check(obs: dict, instruction: str):
-    
-    prompt = f"""
-    You are a task completion checker for a robot.
-    You are given a task and a description of the scene.
-    You need to check if the task is complete.
-    The task is: {instruction}
-    The scene is: {obs}
-    Return a boolean value indicating if the task is complete.
-    You may only return "true" or "false".
-    """
-    response = client.models.generate_content(
-        model=MODEL_ID,
-        contents=[prompt],
-    )
-    return response.text
 
-class IsaacTaskChecker:
-    def __init__(self, scene: int):
+class TaskChecker:
+    def __init__(self, scene: int, vlm: bool = False):
         self.scene = scene
-
+        self.vlm = vlm
         self.instructions = {
             1: "put the cube in the bowl",
             2: "put the can in the mug",
@@ -79,20 +64,61 @@ class IsaacTaskChecker:
             5: "rearrange the cubes so that they spell 'REX'",
             6: "stack all the cubes on top of each other",
         }
-
         self.geometric_checkers = {
             1: {"object_cfg": SceneEntityCfg("rubiks_cube"), "container_cfg": SceneEntityCfg("_24_bowl")},
             2: {"object_cfg": SceneEntityCfg("_10_potted_meat_can"), "container_cfg": SceneEntityCfg("_25_mug")},
             3: {"object_cfg": SceneEntityCfg("_11_banana"), "container_cfg": SceneEntityCfg("small_KLT_visual_collision"), "max_z_threshold": 0.1},
         }
 
-    def check(self, env: ManagerBasedRLEnv):
-        checker_func = check_object_in_container
-        object_cfg = self.geometric_checkers[self.scene]["object_cfg"]
-        container_cfg = self.geometric_checkers[self.scene]["container_cfg"]
-        max_z_threshold = self.geometric_checkers[self.scene].get("max_z_threshold", 0.01)
-        result = checker_func(env, object_cfg, container_cfg, max_z_threshold)
-        return bool(result)
+    def gemini_check(self, obs: dict):
+        prompt = f"""
+        You are a task completion checker for a robot.
+        You are given a task and two images of the robot's view of the scene.
+        You need to check if the task is complete.
+        The task is: {self.instructions[self.scene]}
+        Return a boolean value in the following json format: {{"is_complete": <boolean>}}.
+        The boolean value should be True if the task is complete, False otherwise.
+        """
+        right_image = obs["policy"]["external_cam"][0].clone().detach().cpu().numpy()
+        wrist_image = obs["policy"]["wrist_cam"][0].clone().detach().cpu().numpy()
+        exterior_img = convert_np_to_bytes(right_image)
+        wrist_img = convert_np_to_bytes(wrist_image)
+        exterior_img_bytes = types.Part.from_bytes(
+            data=exterior_img,
+            mime_type='image/png',
+        )
+        wrist_img_bytes = types.Part.from_bytes(
+            data=wrist_img,
+            mime_type='image/png',
+        )
 
-def get_checker(scene: int):
-    return IsaacTaskChecker(scene)
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=[
+                exterior_img_bytes,
+                wrist_img_bytes,
+                prompt,
+            ],
+            config=types.GenerateContentConfig(
+                temperature=0.5,
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+            )
+        )
+
+        return json.loads(parse_json(response.text))["is_complete"]
+
+    def check(self, env: ManagerBasedRLEnv, obs: dict):
+        if self.vlm:
+            gemini_result = self.gemini_check(obs)
+            print("gemini_result: ", gemini_result)
+            return gemini_result
+        else:
+            checker_func = check_object_in_container
+            object_cfg = self.geometric_checkers[self.scene]["object_cfg"]
+            container_cfg = self.geometric_checkers[self.scene]["container_cfg"]
+            max_z_threshold = self.geometric_checkers[self.scene].get("max_z_threshold", 0.01)
+            result = checker_func(env, object_cfg, container_cfg, max_z_threshold)
+            return bool(result)
+
+def get_checker(scene: int, vlm: bool = False):
+    return TaskChecker(scene, vlm)

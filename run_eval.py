@@ -83,7 +83,7 @@ def main(
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
     client = DroidJointPosClient(open_loop_horizon=15)
-    task_checker = get_checker(scene)
+    task_checker = get_checker(scene, vlm=True)
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
@@ -102,10 +102,8 @@ def main(
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
 
-                # call gemini checker on obs dictionary
-
-                if i % 10 == 0 and not task_completed:
-                    task_completed = task_checker.check(env.env)
+                if i % 30 == 0 and not task_completed:
+                    task_completed = task_checker.check(env.env, obs)
                     if task_completed:
                         print("TASK COMPLETED")
                         term = True
