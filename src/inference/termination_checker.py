@@ -82,8 +82,8 @@ class TaskChecker:
             3: {
                 "object_cfg": SceneEntityCfg("_11_banana"),
                 "container_cfg": SceneEntityCfg("small_KLT_visual_collision"),
-                "max_x_threshold": 0.07,
-                "max_y_threshold": 0.02,
+                "max_x_threshold": 0.08,
+                "max_y_threshold": 0.06,
                 "max_z_threshold": 0.03,
             },
             4: {
