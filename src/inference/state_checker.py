@@ -104,8 +104,9 @@ class TaskChecker:
                 thinking_config=types.ThinkingConfig(thinking_budget=0),
             )
         )
-
-        return json.loads(parse_json(response.text))["is_complete"]
+        parsed = parse_json(response.text)
+        print("parsed: ", parsed)
+        return json.loads(parsed)["is_complete"]
 
     def check(self, env: ManagerBasedRLEnv, obs: dict):
         if self.vlm:

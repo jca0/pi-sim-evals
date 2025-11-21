@@ -12,7 +12,6 @@ client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 MODEL_ID = "gemini-robotics-er-1.5-preview"
 
 def convert_np_to_bytes(image):
-
     # convert numpy array to cv2 image
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     _, image_bytes = cv2.imencode('.png', image)
