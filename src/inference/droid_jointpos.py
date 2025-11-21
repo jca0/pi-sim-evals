@@ -6,14 +6,20 @@ import os
 import cv2
 from .gemini_helpers import query_gemini, scale_bounding_boxes, plot_bounding_boxes, convert_np_to_bytes, scale_points, plot_points
 from .abstract_client import InferenceClient
+from typing import Literal
 
 class Client(InferenceClient):
     def __init__(self, 
                 remote_host:str = "localhost", 
                 remote_port:int = 8000,
                 open_loop_horizon:int = 8,
-                 ) -> None:
-        self.open_loop_horizon = open_loop_horizon
+                policy: Literal["pi0.5", "pi0"] = "pi0.5" ) -> None:
+        self.policy = policy
+        if self.policy == "pi0.5":
+            self.open_loop_horizon = 15
+        elif self.policy == "pi0":
+            self.open_loop_horizon = 8
+
         self.client = websocket_client_policy.WebsocketClientPolicy(
             remote_host, remote_port
         )
@@ -21,23 +27,6 @@ class Client(InferenceClient):
         self.actions_from_chunk_completed = 0
         self.pred_action_chunk = None
         self.inference_count = 0
-
-    def _annotate_images(self, exterior_img, wrist_img):
-        """
-        Annotates images with bounding boxes of objects detected by Gemini.
-        """
-        exterior_json = query_gemini(convert_np_to_bytes(exterior_img))
-        wrist_json = query_gemini(convert_np_to_bytes(wrist_img))
-        # scaled_exterior_json = scale_bounding_boxes(exterior_json, exterior_img)
-        # scaled_wrist_json = scale_bounding_boxes(wrist_json, wrist_img)
-        # exterior_annotated = plot_bounding_boxes(exterior_img, scaled_exterior_json)
-        # wrist_annotated = plot_bounding_boxes(wrist_img, scaled_wrist_json)
-        scaled_exterior_json = scale_points(exterior_json, exterior_img)
-        scaled_wrist_json = scale_points(wrist_json, wrist_img)
-        exterior_annotated = plot_points(exterior_img, scaled_exterior_json)
-        wrist_annotated = plot_points(wrist_img, scaled_wrist_json)
-
-        return exterior_annotated, wrist_annotated
 
     def visualize(self, request: dict):
         """
@@ -64,15 +53,8 @@ class Client(InferenceClient):
         ):
             self.actions_from_chunk_completed = 0
 
-            if self.inference_count % 10 == 0:
-                exterior_annotated, wrist_annotated = self._annotate_images(curr_obs["right_image"], curr_obs["wrist_image"])
-                exterior_annotated_resized = image_tools.resize_with_pad(exterior_annotated, 224, 224)
-                wrist_annotated_resized = image_tools.resize_with_pad(wrist_annotated, 224, 224)
-                cv2.imwrite(f"test_imgs/right_image_{self.inference_count}.png", cv2.cvtColor(exterior_annotated_resized, cv2.COLOR_RGB2BGR))
-                cv2.imwrite(f"test_imgs/wrist_image_{self.inference_count}.png", cv2.cvtColor(wrist_annotated_resized, cv2.COLOR_RGB2BGR))
-            else:
-                exterior_annotated_resized = image_tools.resize_with_pad(curr_obs["right_image"], 224, 224)
-                wrist_annotated_resized = image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224)
+            exterior_annotated_resized = image_tools.resize_with_pad(curr_obs["right_image"], 224, 224)
+            wrist_annotated_resized = image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224)
             
             request_data = {
                 "observation/exterior_image_1_left": exterior_annotated_resized,
@@ -82,13 +64,15 @@ class Client(InferenceClient):
                 "prompt": instruction,
             }
             pred_chunk = self.client.infer(request_data)["actions"] # velocities
-            pred_chunk = pred_chunk.copy()
 
-            # convert velocities to joint positions
-            dt = 1.0/15.0
-            pred_chunk[:, :-1] *= dt
-            pred_chunk[:, :-1] = np.cumsum(pred_chunk[:, :-1], axis=0)
-            pred_chunk[:, :-1] += curr_obs["joint_position"]
+            if self.policy == "pi0.5":
+                # convert velocities to joint positions
+                dt = 1.0/15.0
+                pred_chunk = pred_chunk.copy()
+                pred_chunk[:, :-1] *= dt
+                pred_chunk[:, :-1] = np.cumsum(pred_chunk[:, :-1], axis=0)
+                pred_chunk[:, :-1] += curr_obs["joint_position"]
+            
             self.pred_action_chunk = pred_chunk
 
             self.inference_count += 1

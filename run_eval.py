@@ -27,6 +27,7 @@ import mediapy
 from datetime import datetime
 from pathlib import Path
 from tqdm import tqdm
+from typing import Literal
 
 from src.inference.droid_jointpos import Client as DroidJointPosClient
 
@@ -35,6 +36,7 @@ def main(
         episodes:int = 10,
         headless: bool = True,
         scene: int = 1,
+        policy: Literal["pi0.5", "pi0"] = "pi0.5",
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -43,6 +45,7 @@ def main(
     args_cli, _ = parser.parse_known_args()
     args_cli.enable_cameras = True
     args_cli.headless = headless
+    args_cli.policy = policy
     app_launcher = AppLauncher(args_cli)
     simulation_app = app_launcher.app
 
@@ -81,7 +84,7 @@ def main(
 
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
-    client = DroidJointPosClient(open_loop_horizon=15)
+    client = DroidJointPosClient(policy=policy)
 
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
