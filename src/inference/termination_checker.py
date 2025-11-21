@@ -25,9 +25,9 @@ def check_object_in_container(
     env: "ManagerBasedRLEnv",
     object_cfg: "SceneEntityCfg",
     container_cfg: "SceneEntityCfg",
-    max_x_threshold: float = 0.01,
-    max_y_threshold: float = 0.01,
-    max_z_threshold: float = 0.01,) -> bool:
+    max_x_threshold: float = 0.03,
+    max_y_threshold: float = 0.03,
+    max_z_threshold: float = 0.03,) -> bool:
     """
     Check if an object is in a container
     """
@@ -40,15 +40,15 @@ def check_object_in_container(
     
     object_pos = object.data.root_pos_w - env.scene.env_origins
     container_pos = container.data.root_pos_w - env.scene.env_origins
+    print(f"\nobject_pos: {object_pos} \ncontainer_pos: {container_pos}")
     
     x_diff = torch.abs(object_pos[:, 0] - container_pos[:, 0])
     y_diff = torch.abs(object_pos[:, 1] - container_pos[:, 1])
-    z_diff = object_pos[:, 2] - container_pos[:, 2] # positive z means object is in container
+    z_diff = torch.abs(object_pos[:, 2] - container_pos[:, 2])
+    print(f"\nx_diff: {x_diff} \ny_diff: {y_diff} \nz_diff: {z_diff}")
 
-    in_container = torch.logical_and(x_diff < max_x_threshold, y_diff < max_y_threshold)
-    in_container = torch.logical_and(in_container, z_diff < max_z_threshold)
-    in_container = torch.logical_and(in_container, z_diff > 0)
-
+    in_container = torch.logical_and(torch.logical_and(x_diff < max_x_threshold, y_diff < max_y_threshold), z_diff < max_z_threshold)
+    
     return in_container
 
 
@@ -65,9 +65,34 @@ class TaskChecker:
             6: "stack all the cubes on top of each other",
         }
         self.geometric_checkers = {
-            1: {"object_cfg": SceneEntityCfg("rubiks_cube"), "container_cfg": SceneEntityCfg("_24_bowl")},
-            2: {"object_cfg": SceneEntityCfg("_10_potted_meat_can"), "container_cfg": SceneEntityCfg("_25_mug")},
-            3: {"object_cfg": SceneEntityCfg("_11_banana"), "container_cfg": SceneEntityCfg("small_KLT_visual_collision"), "max_z_threshold": 0.1},
+            1: {
+                "object_cfg": SceneEntityCfg("rubiks_cube"), 
+                "container_cfg": SceneEntityCfg("_24_bowl"),
+                "max_x_threshold": 0.01,
+                "max_y_threshold": 0.01,
+                "max_z_threshold": 0.03,
+            },
+            2: {
+                "object_cfg": SceneEntityCfg("_10_potted_meat_can"),
+                "container_cfg": SceneEntityCfg("_25_mug"),
+                "max_x_threshold": 0.03,
+                "max_y_threshold": 0.03,
+                "max_z_threshold": 0.03,
+            },
+            3: {
+                "object_cfg": SceneEntityCfg("_11_banana"),
+                "container_cfg": SceneEntityCfg("small_KLT_visual_collision"),
+                "max_x_threshold": 0.07,
+                "max_y_threshold": 0.02,
+                "max_z_threshold": 0.03,
+            },
+            4: {
+                "object_cfg": SceneEntityCfg("_10_potted_meat_can"),
+                "container_cfg": SceneEntityCfg("_04_sugar_box"),
+                "max_x_threshold": 0.03,
+                "max_y_threshold": 0.03,
+                "max_z_threshold": 0.03,
+            },
         }
 
     def gemini_check(self, obs: dict):
@@ -110,14 +135,15 @@ class TaskChecker:
     def check(self, env: ManagerBasedRLEnv, obs: dict):
         if self.vlm:
             gemini_result = self.gemini_check(obs)
-            print("gemini_result: ", gemini_result)
             return gemini_result
         else:
             checker_func = check_object_in_container
             object_cfg = self.geometric_checkers[self.scene]["object_cfg"]
             container_cfg = self.geometric_checkers[self.scene]["container_cfg"]
-            max_z_threshold = self.geometric_checkers[self.scene].get("max_z_threshold", 0.01)
-            result = checker_func(env, object_cfg, container_cfg, max_z_threshold)
+            max_x_threshold = self.geometric_checkers[self.scene]["max_x_threshold"]
+            max_y_threshold = self.geometric_checkers[self.scene]["max_y_threshold"]
+            max_z_threshold = self.geometric_checkers[self.scene]["max_z_threshold"]
+            result = checker_func(env, object_cfg, container_cfg, max_x_threshold, max_y_threshold, max_z_threshold)
             return bool(result)
 
 def get_checker(scene: int, vlm: bool = False):

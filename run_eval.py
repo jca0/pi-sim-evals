@@ -86,7 +86,7 @@ def main(
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
     client = DroidJointPosClient(policy=policy)
-    task_checker = get_checker(scene, vlm=True)
+    task_checker = get_checker(scene, vlm=False)
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)

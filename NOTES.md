@@ -5,7 +5,7 @@ to run pi0_fast_droid in karl/droid_policies branch
 ``` bash
 cd ~/openpi
 . .venv/bin/activate
-PYTHONUNBUFFERED=1 XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 \
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 \
 python scripts/serve_policy.py --port 8000 \
   policy:checkpoint \
   --policy.config=pi0_fast_droid_jointpos \
@@ -14,7 +14,7 @@ python scripts/serve_policy.py --port 8000 \
 
 to run pi0.5_droid in main branch
 ``` bash
-PYTHONUNBUFFERED=1 XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 \
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 \
 uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi05_droid --policy.dir=gs://openpi-assets/checkpoints/pi05_droid
 ```
 
@@ -23,7 +23,7 @@ uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi05_droid --po
 - added IsaacSim submodule to repo
 ``` bash
 . .venv/bin/activate
-python3 run_eval.py --episodes 1 --scene 1 --headless --policy pi0.5
+python3 run_eval.py --episodes 3 --scene 1 --headless --policy pi0.5
 ```
 
 # ec2 instance
