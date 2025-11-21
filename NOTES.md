@@ -36,8 +36,3 @@ python3 run_eval.py --episodes 3 --scene 1 --headless --policy pi0.5
 rm -rf ~/.cache/jax
 rm -rf ~/.cache/xla
 ```
-
-# todos/ideas:
-- only annotate objects useful to task
-- don't annotate objects at every inference frame, it gets in the way of the observations
-- occasionally reprompt task

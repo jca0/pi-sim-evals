@@ -75,9 +75,9 @@ class TaskChecker:
             2: {
                 "object_cfg": SceneEntityCfg("_10_potted_meat_can"),
                 "container_cfg": SceneEntityCfg("_25_mug"),
-                "max_x_threshold": 0.03,
-                "max_y_threshold": 0.03,
-                "max_z_threshold": 0.03,
+                "max_x_threshold": 0.01,
+                "max_y_threshold": 0.01,
+                "max_z_threshold": 0.05,
             },
             3: {
                 "object_cfg": SceneEntityCfg("_11_banana"),
