@@ -107,7 +107,7 @@ def main(
 
             client.reset()
             mediapy.write_video(
-                video_dir / f"episode_{ep}.mp4",
+                video_dir / f"{policy}_scene{scene}_ep{ep}.mp4",
                 video,
                 fps=15,
             )

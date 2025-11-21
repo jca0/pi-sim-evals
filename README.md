@@ -55,7 +55,7 @@ Install extra dependencies
 First, make sure you download the simulation assets and unpack them into the root directory of this package.
 Using the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html), this can be done with:
 ```bash
-curl -O https://storage.googleapis.com/openpi-assets-simeval/env_assets/simple_example_v2/assets.zip
+curl -O https://pi-sim-assets.s3.us-east-1.amazonaws.com/assets.zip 
 unzip assets.zip
 ```
 
