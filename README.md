@@ -24,11 +24,6 @@ uv sync
 source .venv/bin/activate
 ```
 
-Install extra dependencies
-```bash
-./submodules/IsaacLab/isaaclab.sh -i
-```
-
 ## Quick Start
 
 First, make sure you download the simulation assets and unpack them into the root directory of this package.
@@ -39,6 +34,7 @@ unzip assets.zip
 ```
 
 Then, in a separate terminal, launch the policy server on `localhost:8000`. 
+
 For example, to launch a pi0-FAST-DROID policy (with joint position control),
 checkout [openpi](https://github.com/Physical-Intelligence/openpi/tree/karl/droid_policies) to the `karl/droid_policies` branch and run the command below in a separate terminal
 ```bash
