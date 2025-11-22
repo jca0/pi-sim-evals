@@ -32,13 +32,7 @@ from typing import Literal
 from src.inference.droid_jointpos import Client as DroidJointPosClient
 
 
-def main(
-        episodes:int = 10,
-        headless: bool = True,
-        scene: int = 1,
-        policy: Literal["pi0.5", "pi0"] = "pi0.5",
-        ):
-    # launch omniverse app with arguments (inside function to prevent overriding tyro)
+def run_simulation(episodes: int, headless: bool, scene: int, policy: Literal["pi0.5", "pi0"] = "pi0.5", output_dir: Path = Path("runs")):
     from isaaclab.app import AppLauncher
     parser = argparse.ArgumentParser(description="Tutorial on creating an empty stage.")
     AppLauncher.add_app_launcher_args(parser)
@@ -88,7 +82,7 @@ def main(
     client = DroidJointPosClient(policy=policy)
     task_checker = get_checker(scene, vlm=False)
 
-    video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
+    video_dir = output_dir / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
     video = []
     ep = 0
@@ -124,6 +118,22 @@ def main(
 
     env.close()
     simulation_app.close()
+    return video_dir
+
+def main(
+        episodes:int = 10,
+        headless: bool = True,
+        scene: int = 1,
+        policy: Literal["pi0.5", "pi0"] = "pi0.5",
+        output_dir: Path = Path("runs"),
+        ):
+    return run_simulation(
+        episodes=episodes,
+        headless=headless,
+        scene=scene,
+        policy=policy,
+        output_dir=output_dir,
+    )
 
 if __name__ == "__main__":
     args = tyro.cli(main)
