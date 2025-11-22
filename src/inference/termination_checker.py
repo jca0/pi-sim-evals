@@ -35,12 +35,10 @@ def check_object_in_container(
     
     object_pos = object.data.root_pos_w - env.scene.env_origins
     container_pos = container.data.root_pos_w - env.scene.env_origins
-    print(f"\nobject_pos: {object_pos} \ncontainer_pos: {container_pos}")
     
     x_diff = torch.abs(object_pos[:, 0] - container_pos[:, 0])
     y_diff = torch.abs(object_pos[:, 1] - container_pos[:, 1])
     z_diff = torch.abs(object_pos[:, 2] - container_pos[:, 2])
-    print(f"\nx_diff: {x_diff} \ny_diff: {y_diff} \nz_diff: {z_diff}")
 
     in_container = torch.logical_and(torch.logical_and(x_diff < max_x_threshold, y_diff < max_y_threshold), z_diff < max_z_threshold)
     

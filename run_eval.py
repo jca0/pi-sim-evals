@@ -102,7 +102,6 @@ def run_simulation(episodes: int, headless: bool, scene: int, policy: Literal["p
                 if i % 30 == 0 and not task_completed:
                     task_completed = task_checker.check(env.env, obs)
                     if task_completed:
-                        print("TASK COMPLETED")
                         term = True
 
                 if term or trunc:
@@ -128,8 +127,8 @@ def main(
         output_dir: Path = Path("runs"),
         ):
     return run_simulation(
-        episodes=episodes,
-        headless=headless,
+        episodes=1,
+        headless=True,
         scene=scene,
         policy=policy,
         output_dir=output_dir,
