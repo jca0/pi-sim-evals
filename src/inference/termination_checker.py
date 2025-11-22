@@ -11,11 +11,6 @@ from dotenv import load_dotenv
 import os
 from src.inference.gemini_helpers import convert_np_to_bytes, parse_json
 
-load_dotenv()
-
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-MODEL_ID = "gemini-robotics-er-1.5-preview"
-
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
     from isaaclab.managers import SceneEntityCfg
@@ -96,6 +91,10 @@ class TaskChecker:
         }
 
     def gemini_check(self, obs: dict):
+        load_dotenv()
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        model_id = "gemini-robotics-er-1.5-preview"
+        
         prompt = f"""
         You are a task completion checker for a robot.
         You are given a task and two images of the robot's view of the scene.
@@ -118,7 +117,7 @@ class TaskChecker:
         )
 
         response = client.models.generate_content(
-            model=MODEL_ID,
+            model=model_id,
             contents=[
                 exterior_img_bytes,
                 wrist_img_bytes,
