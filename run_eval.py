@@ -82,7 +82,7 @@ def run_simulation(episodes: int, headless: bool, scene: int, policy: Literal["p
     client = DroidJointPosClient(policy=policy)
     task_checker = get_checker(scene, vlm=False)
 
-    video_dir = output_dir / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
+    video_dir = output_dir 
     video_dir.mkdir(parents=True, exist_ok=True)
     video = []
     ep = 0
@@ -109,7 +109,7 @@ def run_simulation(episodes: int, headless: bool, scene: int, policy: Literal["p
 
             client.reset()
             mediapy.write_video(
-                video_dir / f"{policy}_scene{scene}_ep{ep}.mp4",
+                video_dir / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.mp4",
                 video,
                 fps=15,
             )
@@ -127,8 +127,8 @@ def main(
         output_dir: Path = Path("runs"),
         ):
     return run_simulation(
-        episodes=1,
-        headless=True,
+        episodes=episodes,
+        headless=headless,
         scene=scene,
         policy=policy,
         output_dir=output_dir,

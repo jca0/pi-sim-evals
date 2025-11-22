@@ -1,6 +1,8 @@
 from pathlib import Path
 import tempfile
 import traceback
+import subprocess
+
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -31,30 +33,36 @@ def simulator(request: SimRequest):
 
     tmp_root = Path(tempfile.mkdtemp(prefix="sim_run_"))
 
-    try:
-        video_dir = run_simulation(
-            episodes=1,
-            headless=True,
-            scene=request.scene,
-            policy=request.policy,
-            output_dir=tmp_root,
-        )
+    cmd = [
+        "python3",
+        "run_eval.py",
+        "--episodes", "1",
+        "--headless",
+        "--scene", str(request.scene),
+        "--policy", request.policy,
+        "--output_dir", str(tmp_root),
+    ]
 
-        mp4_files = sorted(video_dir.glob("*.mp4"))
-        if not mp4_files:
-            raise HTTPException(status_code=500, detail="Simulation produced no video")
-        
-        video_path = mp4_files[-1]
-        print(video_path.name)
+    result = subprocess.run(cmd,
+                capture_output=True,
+                text=True)
 
-        return StreamingResponse(
-            iterfile(video_path),
-            media_type="video/mp4",
-            headers={
-                "Content-Disposition": f'inline; filename="{video_path.name}"'
-            }
-        )
+    if result.returncode != 0:
+        print("run_eval stdout:\n", result.stdout)
+        print("run_eval stderr:\n", result.stderr)
+        raise HTTPException(status_code=500, detail=f"Simulation failed: {result.stderr}")
 
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Simulation failed: {e}")
+    mp4_files = sorted(tmp_root.glob("*.mp4"))
+    if not mp4_files:
+        raise HTTPException(status_code=500, detail="Simulation produced no video")
+    
+    video_path = mp4_files[-1]
+    print("serving video: ", video_path.name)
+
+    return StreamingResponse(
+        iterfile(video_path),
+        media_type="video/mp4",
+        headers={
+            "Content-Disposition": f'inline; filename=\"{video_path.name}\"'
+        }
+    )
