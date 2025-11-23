@@ -30,6 +30,7 @@ from tqdm import tqdm
 from typing import Literal
 
 from src.inference.droid_jointpos import Client as DroidJointPosClient
+from src.inference.motion_planner import RmpflowClient
 
 
 def main(
@@ -85,7 +86,8 @@ def main(
 
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
-    client = DroidJointPosClient(policy=policy)
+    # client = DroidJointPosClient(policy=policy) # DROID policy
+    client = RmpflowClient() # motion planner
     task_checker = get_checker(scene, vlm=False)
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
