@@ -23,7 +23,7 @@ uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi05_droid --po
 - added IsaacSim submodule to repo
 ``` bash
 . .venv/bin/activate
-python3 run_eval.py --episodes 3 --scene 1 --headless --policy pi0.5
+python3 run_eval.py --episodes 1 --scene 1 --headless --policy pi0.5
 ```
 
 # ec2 instance

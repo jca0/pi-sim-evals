@@ -91,6 +91,8 @@ def main(
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
     video = []
+    right_video = []
+    wrist_video = []
     ep = 0
     max_steps = env.env.max_episode_length
     with torch.no_grad():
@@ -102,6 +104,8 @@ def main(
                     cv2.imshow("Right Camera", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
                 video.append(ret["viz"])
+                right_video.append(ret["right_image"])
+                wrist_video.append(ret["wrist_image"])
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
 
@@ -120,7 +124,21 @@ def main(
                 video,
                 fps=15,
             )
+            # added right and wrist videos
+            mediapy.write_video(
+                video_dir / f"{policy}_scene{scene}_ep{ep}_right.mp4",
+                right_video,
+                fps=15,
+            )
+            mediapy.write_video(
+                video_dir / f"{policy}_scene{scene}_ep{ep}_wrist.mp4",
+                wrist_video,
+                fps=15,
+            )
             video = []
+            # reset right and wrist videos
+            right_video = []
+            wrist_video = []
 
     env.close()
     simulation_app.close()
