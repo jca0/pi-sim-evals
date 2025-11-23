@@ -86,8 +86,8 @@ class Client(InferenceClient):
         else:
             action = np.concatenate([action[:-1], np.zeros((1,))])
 
-        img1 = image_tools.resize_with_pad(curr_obs["right_image"], 672, 672)
-        img2 = image_tools.resize_with_pad(curr_obs["wrist_image"], 672, 672)
+        img1 = image_tools.resize_with_pad(curr_obs["right_image"], 224, 224)
+        img2 = image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224)
         both = np.concatenate([img1, img2], axis=1)
 
         # added right image and wrist image to dict
