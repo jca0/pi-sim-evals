@@ -6,6 +6,7 @@ import gradio as gr
 SIM_API_URL = os.getenv("SIM_API_URL", "http://localhost:9000/simulate")
 
 def run_simulator(instruction, episode_length, scene, policy):
+    print(f"Running simulator with payload: {payload}")
     payload = {
         "instruction": instruction,
         "episode_length": float(episode_length),
@@ -73,4 +74,5 @@ with gr.Blocks(title="DROID Simulator") as demo:
     )
 
 if __name__ == "__main__":
+    print(f"Starting simulator with API URL: {SIM_API_URL}")
     demo.launch(server_name="0.0.0.0", server_port=7860)
