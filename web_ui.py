@@ -3,7 +3,7 @@ import tempfile
 import requests
 import gradio as gr
 
-SIM_API_URL = "http://localhost:9000/simulate"
+SIM_API_URL = os.getenv("SIM_API_URL", "http://localhost:9000/simulate")
 
 def run_simulator(instruction, episode_length, scene, policy):
     payload = {
