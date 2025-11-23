@@ -89,8 +89,9 @@ class Client(InferenceClient):
         img1 = image_tools.resize_with_pad(curr_obs["right_image"], 224, 224)
         img2 = image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224)
         both = np.concatenate([img1, img2], axis=1)
-
-        return {"action": action, "viz": both}
+        both_unscaled = np.concatenate([curr_obs["right_image"], curr_obs["wrist_image"]], axis=1)
+        
+        return {"action": action, "viz": both, "viz_unscaled": both_unscaled}
 
     def _extract_observation(self, obs_dict, *, save_to_disk=False):
         # Assign images

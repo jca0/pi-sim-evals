@@ -87,7 +87,7 @@ def run_simulation(
                 if not headless:
                     cv2.imshow("Right Camera", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
-                video.append(ret["viz"])
+                video.append(ret["unscaled_viz"])
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
 
