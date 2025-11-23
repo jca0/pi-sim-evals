@@ -7,14 +7,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from run_eval import run_simulation
-
 app = FastAPI(title="DROID Simulator API")
 
 ALLOWED_POLICIES = {"pi0.5", "pi0"}
 ALLOWED_SCENES = {1, 2, 3, 4, 5, 6}
 
 class SimRequest(BaseModel):
+    instruction: str
+    episode_length: float
     scene: int
     policy: str
 
@@ -37,7 +37,9 @@ def simulator(request: SimRequest):
         "python3",
         "run_eval.py",
         "--episodes", "1",
+        "--episode_length", str(request.episode_length),
         "--headless",
+        "--instruction", request.instruction,
         "--scene", str(request.scene),
         "--policy", request.policy,
         "--output_dir", str(tmp_root),

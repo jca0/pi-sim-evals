@@ -32,7 +32,15 @@ from typing import Literal
 from src.inference.droid_jointpos import Client as DroidJointPosClient
 
 
-def run_simulation(episodes: int, headless: bool, scene: int, policy: Literal["pi0.5", "pi0"] = "pi0.5", output_dir: Path = Path("runs")):
+def run_simulation(
+    instruction: str,
+    episodes: int,
+    episode_length: float,
+    headless: bool,
+    scene: int,
+    policy: Literal["pi0.5", "pi0"] = "pi0.5",
+    output_dir: Path = Path("runs"),
+):
     from isaaclab.app import AppLauncher
     parser = argparse.ArgumentParser(description="Tutorial on creating an empty stage.")
     AppLauncher.add_app_launcher_args(parser)
@@ -56,25 +64,9 @@ def run_simulation(episodes: int, headless: bool, scene: int, policy: Literal["p
         num_envs=1,
         use_fabric=True,
     )
-    instruction = None
-    match scene:
-        case 1:
-            instruction = "put the cube in the bowl"
-        case 2:
-            instruction = "put the can in the mug"
-        case 3:
-            instruction = "put banana in the bin"
-        case 4: 
-            instruction = "put the meat can on the sugar box"
-        case 5:
-            instruction = "rearrange the cubes so that they spell 'REX'"
-        case 6:
-            instruction = "stack all the cubes on top of each other"
-        case _:
-            raise ValueError(f"Scene {scene} not supported")
         
     env_cfg.set_scene(scene)
-    env_cfg.episode_length_s = 30.0 # LENGTH OF EPISODE
+    env_cfg.episode_length_s = episode_length
     env = gym.make("DROID", cfg=env_cfg)
 
     obs, _ = env.reset()
@@ -120,14 +112,18 @@ def run_simulation(episodes: int, headless: bool, scene: int, policy: Literal["p
     return video_dir
 
 def main(
+        instruction: str = "put the cube in the bowl",
         episodes:int = 10,
+        episode_length: float = 30.0,
         headless: bool = True,
         scene: int = 1,
         policy: Literal["pi0.5", "pi0"] = "pi0.5",
         output_dir: Path = Path("runs"),
         ):
     return run_simulation(
+        instruction=instruction,
         episodes=episodes,
+        episode_length=episode_length,
         headless=headless,
         scene=scene,
         policy=policy,
