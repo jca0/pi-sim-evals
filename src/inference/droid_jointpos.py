@@ -4,7 +4,6 @@ from PIL import Image
 from openpi_client import websocket_client_policy, image_tools
 import os
 import cv2
-from .gemini_helpers import query_gemini, scale_bounding_boxes, plot_bounding_boxes, convert_np_to_bytes, scale_points, plot_points
 from .abstract_client import InferenceClient
 from typing import Literal
 
