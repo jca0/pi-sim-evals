@@ -28,21 +28,13 @@ from datetime import datetime
 from pathlib import Path
 from tqdm import tqdm
 from typing import Literal
-import pickle
-import sys
-import os
 
 from src.inference.cutamp_jointpos import Client as CutampJointPosClient
-
-CUROBO_PATH = "/home/ubuntu/curobo/src"
-if CUROBO_PATH not in sys.path:
-    sys.path.insert(0, CUROBO_PATH)
 
 def main(
         episodes:int = 10,
         headless: bool = True,
         scene: int = 1,
-        policy: Literal["pi0.5", "pi0"] = "pi0.5",
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -51,7 +43,6 @@ def main(
     args_cli, _ = parser.parse_known_args()
     args_cli.enable_cameras = True
     args_cli.headless = headless
-    args_cli.policy = policy
     app_launcher = AppLauncher(args_cli)
     simulation_app = app_launcher.app
 
@@ -91,26 +82,21 @@ def main(
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
 
-    client = CutampJointPosClient(policy=policy)
+    client = CutampJointPosClient()
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
     video = []
-    right_video = []
-    wrist_video = []
     ep = 0
     max_steps = env.env.max_episode_length
     with torch.no_grad():
         for ep in range(episodes):
-            task_completed = False
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
                 if not headless:
                     cv2.imshow("Right Camera", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
                 video.append(ret["viz"])
-                right_video.append(ret["right_image"])
-                wrist_video.append(ret["wrist_image"])
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
 
@@ -119,25 +105,11 @@ def main(
 
             client.reset()
             mediapy.write_video(
-                video_dir / f"{policy}_scene{scene}_ep{ep}.mp4",
+                video_dir / f"cutamp_scene{scene}_ep{ep}.mp4",
                 video,
                 fps=15,
             )
-            # added right and wrist videos
-            mediapy.write_video(
-                video_dir / f"{policy}_scene{scene}_ep{ep}_right.mp4",
-                right_video,
-                fps=15,
-            )
-            mediapy.write_video(
-                video_dir / f"{policy}_scene{scene}_ep{ep}_wrist.mp4",
-                wrist_video,
-                fps=15,
-            )
             video = []
-            # reset right and wrist videos
-            right_video = []
-            wrist_video = []
 
     env.close()
     simulation_app.close()
