@@ -36,3 +36,9 @@ python3 run_eval.py --episodes 1 --scene 1 --headless --policy pi0.5
 rm -rf ~/.cache/jax
 rm -rf ~/.cache/xla
 ```
+
+# wandb
+entity is the team name  
+```bash
+export WANDB_ENTITY=jing-cao
+```
