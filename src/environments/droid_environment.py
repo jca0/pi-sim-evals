@@ -42,7 +42,7 @@ class SceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/external_cam",
         height=720,
         width=1280,
-        data_types=["rgb"],
+        data_types=["rgb", "distance_to_image_plane"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=2.1,
             focus_distance=28.0,
@@ -57,7 +57,7 @@ class SceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/robot/Gripper/Robotiq_2F_85/base_link/wrist_cam",
         height=720,
         width=1280,
-        data_types=["rgb"],
+        data_types=["rgb", "distance_to_image_plane"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=2.8,
             focus_distance=28.0,
@@ -210,11 +210,27 @@ class ObservationCfg:
                     "normalize": False,
                     }
                 )
+        external_cam_depth = ObsTerm(
+                func=mdp.observations.image,
+                params={
+                    "sensor_cfg": SceneEntityCfg("external_cam"),
+                    "data_type": "distance_to_image_plane",
+                    "normalize": False,
+                    }
+                )
         wrist_cam = ObsTerm(
                 func=mdp.observations.image,
                 params={
                     "sensor_cfg": SceneEntityCfg("wrist_cam"),
                     "data_type": "rgb",
+                    "normalize": False,
+                    }
+                )
+        wrist_cam_depth = ObsTerm(
+                func=mdp.observations.image,
+                params={
+                    "sensor_cfg": SceneEntityCfg("wrist_cam"),
+                    "data_type": "distance_to_image_plane",
                     "normalize": False,
                     }
                 )
