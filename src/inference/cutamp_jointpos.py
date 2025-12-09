@@ -9,6 +9,7 @@ from typing import Literal
 import pickle
 import sys
 import os
+import matplotlib.pyplot as plt
 
 CUROBO_PATH = "/home/ubuntu/curobo/src"
 if CUROBO_PATH not in sys.path:
@@ -18,7 +19,7 @@ class Client(InferenceClient):
     def __init__(self, 
                 ) -> None:
         
-        with open("jing_cutamp_plan.pkl", "rb") as f:
+        with open("jing_cutamp_plan_v2.pkl", "rb") as f:
             self.curobo_plan = pickle.load(f)
         
         # Initialize plan execution state
@@ -27,6 +28,7 @@ class Client(InferenceClient):
         self.current_waypoint_idx = 0
         self.gripper_action_pending = None
         self.gripper_action_steps_remaining = 0
+        self.actual_history = []
 
     def visualize(self, request: dict):
         """
@@ -70,6 +72,33 @@ class Client(InferenceClient):
                 # Gripper action completed, move to next step
                 self.gripper_action_pending = None
                 self.current_plan_step += 1
+
+        # RECORD ACTUAL JOINT POSITIONS
+        if self.current_trajectory is not None:
+            self.actual_history.append(curr_obs["joint_position"])
+
+        # PLOT ACTUAL VS EXPECTED JOINT POSITIONS
+        if self.current_trajectory is not None and self.current_waypoint_idx >= len(self.current_trajectory):
+            actual_arr = np.array(self.actual_history)
+            expected_arr = self.current_trajectory
+            
+            if len(actual_arr) > 1:
+                fig, axs = plt.subplots(7, 1, figsize=(10, 15))
+                steps = np.arange(len(expected_arr))
+                
+                for joint_idx in range(7):
+                    axs[joint_idx].plot(steps, expected_arr[:, joint_idx], 'r--', label='Expected')
+                    # Use actual_arr[1:] to match the steps resulting from the actions
+                    axs[joint_idx].plot(steps, actual_arr[:, joint_idx], 'b-', label='Actual')
+                    axs[joint_idx].set_title(f'Joint {joint_idx}')
+                    axs[joint_idx].legend()
+                
+                plt.tight_layout()
+                plt.savefig(f"output/traj_plot_step_{self.current_plan_step}.png")
+                plt.close()
+            
+            self.actual_history = []
+        # END PLOTTING CODE
         
         # Check if we need to load a new action from the plan
         if self.current_trajectory is None or self.current_waypoint_idx >= len(self.current_trajectory):
