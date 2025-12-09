@@ -1,5 +1,6 @@
 import tyro
 import numpy as np
+import torch
 from PIL import Image
 from openpi_client import websocket_client_policy, image_tools
 import os
@@ -15,6 +16,11 @@ CUROBO_PATH = "/home/ubuntu/curobo/src"
 if CUROBO_PATH not in sys.path:
     sys.path.insert(0, CUROBO_PATH)
 
+from curobo.types.base import TensorDeviceType
+from curobo.types.robot import JointState
+from curobo.util_file import get_robot_configs_path, join_path, load_yaml
+from curobo.wrap.reacher.motion_gen import MotionGen, MotionGenConfig
+
 class Client(InferenceClient):
     def __init__(self, 
                 ) -> None:
@@ -22,13 +28,71 @@ class Client(InferenceClient):
         with open("jing_cutamp_plan_v2.pkl", "rb") as f:
             self.curobo_plan = pickle.load(f)
         
-        # Initialize plan execution state
         self.current_plan_step = 0
         self.current_trajectory = None
         self.current_waypoint_idx = 0
         self.gripper_action_pending = None
         self.gripper_action_steps_remaining = 0
+        self.last_gripper_state = 0.0
         self.actual_history = []
+
+        self._init_curobo_fk()
+
+    def _init_curobo_fk(self):
+        robot_file = "franka.yml"
+        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        tensor_args = TensorDeviceType(device=torch.device(device))
+        
+        robot_cfg_path = join_path(get_robot_configs_path(), robot_file)
+        robot_cfg = load_yaml(robot_cfg_path)["robot_cfg"]
+        
+        motion_gen_config = MotionGenConfig.load_from_robot_config(
+            robot_cfg,
+            None,
+            tensor_args,
+            use_cuda_graph=False,
+        )
+        self.motion_gen = MotionGen(motion_gen_config)
+        self.tensor_args = tensor_args
+
+    def compute_fk(self, joint_positions):
+        if joint_positions.ndim == 1:
+            joint_positions = joint_positions.unsqueeze(0) if isinstance(joint_positions, torch.Tensor) else joint_positions[None]
+        
+        if isinstance(joint_positions, np.ndarray):
+            joint_positions = torch.from_numpy(joint_positions).to(self.tensor_args.device)
+        
+        js = JointState.from_position(joint_positions)
+        state = self.motion_gen.compute_kinematics(js)
+        ee_pose = state.ee_pose
+        
+        return {
+            'position': ee_pose.position.cpu().numpy(),
+            'quaternion': ee_pose.quaternion.cpu().numpy()  # [w, x, y, z]
+        }
+
+    def compute_pose_error(self, desired_pose, actual_pose):
+        pos_error = np.linalg.norm(desired_pose['position'] - actual_pose['position'])
+        
+        q_des = desired_pose['quaternion']  # [w, x, y, z]
+        q_act = actual_pose['quaternion']  # [w, x, y, z]
+        
+        q_act_inv = np.array([q_act[0], -q_act[1], -q_act[2], -q_act[3]])
+        
+        q_rel = np.array([
+            q_des[0] * q_act_inv[0] - q_des[1] * q_act_inv[1] - q_des[2] * q_act_inv[2] - q_des[3] * q_act_inv[3],
+            q_des[0] * q_act_inv[1] + q_des[1] * q_act_inv[0] + q_des[2] * q_act_inv[3] - q_des[3] * q_act_inv[2],
+            q_des[0] * q_act_inv[2] - q_des[1] * q_act_inv[3] + q_des[2] * q_act_inv[0] + q_des[3] * q_act_inv[1],
+            q_des[0] * q_act_inv[3] + q_des[1] * q_act_inv[2] - q_des[2] * q_act_inv[1] + q_des[3] * q_act_inv[0]
+        ])
+        
+        q_rel = q_rel / np.linalg.norm(q_rel)
+        rot_error = 2 * np.arccos(np.clip(np.abs(q_rel[0]), 0, 1))
+        
+        return {
+            'translation_error': pos_error,
+            'rotation_error': rot_error
+        }
 
     def visualize(self, request: dict):
         """
@@ -41,12 +105,12 @@ class Client(InferenceClient):
         return combined
 
     def reset(self):
-        # Reset plan execution state
         self.current_plan_step = 0
         self.current_trajectory = None
         self.current_waypoint_idx = 0
         self.gripper_action_pending = None
         self.gripper_action_steps_remaining = 0
+        self.last_gripper_state = 0.0 
 
     def infer(self, obs: dict, instruction: str) -> dict:
         """
@@ -61,6 +125,7 @@ class Client(InferenceClient):
                 # Return current joint position with gripper action
                 joint_pos = curr_obs["joint_position"]
                 gripper_val = 1.0 if self.gripper_action_pending == "close" else 0.0
+                self.last_gripper_state = gripper_val  # Update tracked state
                 action = np.concatenate([joint_pos, np.array([gripper_val])])
                 
                 img1 = image_tools.resize_with_pad(curr_obs["right_image"], 224, 224)
@@ -69,7 +134,7 @@ class Client(InferenceClient):
                 
                 return {"action": action, "viz": both, "right_image": curr_obs["right_image"], "wrist_image": curr_obs["wrist_image"]}
             else:
-                # Gripper action completed, move to next step
+                self.last_gripper_state = 1.0 if self.gripper_action_pending == "close" else 0.0
                 self.gripper_action_pending = None
                 self.current_plan_step += 1
 
@@ -96,6 +161,23 @@ class Client(InferenceClient):
                 plt.tight_layout()
                 plt.savefig(f"output/traj_plot_step_{self.current_plan_step}.png")
                 plt.close()
+
+                desired_final_joints = expected_arr[-1]  # Last waypoint
+                actual_final_joints = actual_arr[-1]     # Last actual position
+                
+                # Compute forward kinematics
+                desired_ee_pose = self.compute_fk(desired_final_joints)
+                actual_ee_pose = self.compute_fk(actual_final_joints)
+                
+                # Compute errors
+                errors = self.compute_pose_error(
+                    {'position': desired_ee_pose['position'][0], 'quaternion': desired_ee_pose['quaternion'][0]},
+                    {'position': actual_ee_pose['position'][0], 'quaternion': actual_ee_pose['quaternion'][0]}
+                )
+                
+                print(f"\ntrajectory {self.current_plan_step} end-effector errors:")
+                print(f"translation error: {errors['translation_error']*1000:.2f} mm")
+                print(f"rotation error: {np.degrees(errors['rotation_error']):.2f} degrees")
             
             self.actual_history = []
         # END PLOTTING CODE
@@ -123,17 +205,18 @@ class Client(InferenceClient):
                 if action_dict["action"] == "open":
                     self.gripper_action_pending = "open"
                     # Approximate 0.25 seconds at 15 fps = ~4 steps
-                    self.gripper_action_steps_remaining = 4
+                    self.gripper_action_steps_remaining = 20
                 elif action_dict["action"] == "close":
                     self.gripper_action_pending = "close"
                     # Approximate 0.4 seconds at 15 fps = ~6 steps
-                    self.gripper_action_steps_remaining = 6
+                    self.gripper_action_steps_remaining = 20
                 else:
                     raise ValueError(f"Unknown gripper action: {action_dict['action']}")
                 
                 # Return action with gripper state
                 joint_pos = curr_obs["joint_position"]
                 gripper_val = 1.0 if self.gripper_action_pending == "close" else 0.0
+                self.last_gripper_state = gripper_val 
                 action = np.concatenate([joint_pos, np.array([gripper_val])])
                 
                 img1 = image_tools.resize_with_pad(curr_obs["right_image"], 224, 224)
@@ -154,8 +237,7 @@ class Client(InferenceClient):
         
         # Ensure waypoint has correct shape (7 joints + 1 gripper)
         if waypoint.shape[0] == 7:
-            # Add gripper position (keep current gripper state)
-            gripper_val = curr_obs["gripper_position"][0]
+            gripper_val = self.last_gripper_state 
             action = np.concatenate([waypoint, np.array([gripper_val])])
         else:
             action = waypoint
