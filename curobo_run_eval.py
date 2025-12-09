@@ -24,6 +24,8 @@ from curobo.wrap.reacher.motion_gen import MotionGen, MotionGenConfig
 # DROID imports
 from openpi_client import image_tools
 
+print("DONE IMPORTING")
+
 class CuroboClient:
     def __init__(self, env, device="cuda:0"):
         self.env = env
@@ -89,8 +91,14 @@ class CuroboClient:
         )
 
     def plan_to_pose(self, current_q, target_pose):
-        # Pad current_q (7 DOF) to 9 DOFs (7 arm + 2 gripper) for Curobo
-        start_state = current_q.unsqueeze(0)
+        # The Curobo robot model seems to be configured for 7 DOF (arm only)
+        # So we pass only the 7 arm joints.
+        # current_q should be (7,) or (1,7)
+        if current_q.dim() == 1:
+            start_state = current_q.unsqueeze(0) # Shape (1, 7)
+        else:
+            start_state = current_q # Shape (1, 7)
+            
         js = JointState.from_position(start_state)
         
         # Plan trajectory
@@ -110,16 +118,17 @@ class CuroboClient:
         self.gripper_timer = 0
 
     def visualize(self, obs):
-        # Create visualization similar to original script
         right_image = obs["policy"]["external_cam"][0].cpu().numpy()
         wrist_image = obs["policy"]["wrist_cam"][0].cpu().numpy()
+        
         img1 = image_tools.resize_with_pad(right_image, 224, 224)
         img2 = image_tools.resize_with_pad(wrist_image, 224, 224)
         return np.concatenate([img1, img2], axis=1)
 
     def infer(self, obs, instruction):
         # Extract observations
-        joint_pos = obs["policy"]["arm_joint_pos"][0].to(self.device) # 7 DOFs
+        # Use .view(-1) to flatten to 1D (7,) regardless of input shape (1,7) or (7,)
+        joint_pos = obs["policy"]["arm_joint_pos"].to(self.device).view(-1)
         action_q = joint_pos.clone()
         
         # Helper to construct full action
@@ -138,7 +147,7 @@ class CuroboClient:
         elif self.state == "PLAN_PICK":
             cube_pose = self._get_object_pose(self.cube_name)
             target = cube_pose.clone()
-            target.position[0, 2] += 0.2 # 20cm above cube
+            target.position[0, 2] += 0.3 # 30cm above cube (avoid table collision with long fingers)
             # Rotate gripper to point down (Quaternion: w, x, y, z)
             target.quaternion[0] = torch.tensor([0.0, 1.0, 0.0, 0.0], device=self.device)
             
@@ -148,8 +157,8 @@ class CuroboClient:
                 self.state = "EXECUTE_PRE_PICK"
 
         elif self.state == "EXECUTE_PRE_PICK":
-            if self.plan is not None and self.plan_idx < self.plan.position.shape[1]:
-                action_q = self.plan.position[0, self.plan_idx, :7]
+            if self.plan is not None and self.plan_idx < self.plan.position.shape[0]:
+                action_q = self.plan.position[self.plan_idx, :7]
                 self.plan_idx += 1
             else:
                 self.state = "PLAN_GRASP"
@@ -157,7 +166,7 @@ class CuroboClient:
         elif self.state == "PLAN_GRASP":
             cube_pose = self._get_object_pose(self.cube_name)
             target = cube_pose.clone()
-            target.position[0, 2] += 0.02 # At cube height
+            target.position[0, 2] += 0.13 # At cube height + finger length offset (approx 11cm) + 2cm margin
             target.quaternion[0] = torch.tensor([0.0, 1.0, 0.0, 0.0], device=self.device)
             
             self.plan = self.plan_to_pose(joint_pos, target)
@@ -166,8 +175,8 @@ class CuroboClient:
                 self.state = "EXECUTE_GRASP"
 
         elif self.state == "EXECUTE_GRASP":
-            if self.plan is not None and self.plan_idx < self.plan.position.shape[1]:
-                action_q = self.plan.position[0, self.plan_idx, :7]
+            if self.plan is not None and self.plan_idx < self.plan.position.shape[0]:
+                action_q = self.plan.position[self.plan_idx, :7]
                 self.plan_idx += 1
             else:
                 self.state = "CLOSE_GRIPPER"
@@ -182,7 +191,7 @@ class CuroboClient:
         elif self.state == "PLAN_LIFT":
             cube_pose = self._get_object_pose(self.cube_name)
             target = cube_pose.clone()
-            target.position[0, 2] += 0.2 # Lift up
+            target.position[0, 2] += 0.3 # Lift up
             target.quaternion[0] = torch.tensor([0.0, 1.0, 0.0, 0.0], device=self.device)
             
             self.plan = self.plan_to_pose(joint_pos, target)
@@ -191,8 +200,8 @@ class CuroboClient:
                 self.state = "EXECUTE_LIFT"
 
         elif self.state == "EXECUTE_LIFT":
-            if self.plan is not None and self.plan_idx < self.plan.position.shape[1]:
-                action_q = self.plan.position[0, self.plan_idx, :7]
+            if self.plan is not None and self.plan_idx < self.plan.position.shape[0]:
+                action_q = self.plan.position[self.plan_idx, :7]
                 self.plan_idx += 1
             else:
                 self.state = "PLAN_PLACE"
@@ -201,7 +210,7 @@ class CuroboClient:
             if self.bowl_name:
                 bowl_pose = self._get_object_pose(self.bowl_name)
                 target = bowl_pose.clone()
-                target.position[0, 2] += 0.3 # Above bowl
+                target.position[0, 2] += 0.4 # Above bowl
                 target.quaternion[0] = torch.tensor([0.0, 1.0, 0.0, 0.0], device=self.device)
                 
                 self.plan = self.plan_to_pose(joint_pos, target)
@@ -212,8 +221,8 @@ class CuroboClient:
                 self.state = "DONE"
 
         elif self.state == "EXECUTE_PLACE":
-            if self.plan is not None and self.plan_idx < self.plan.position.shape[1]:
-                action_q = self.plan.position[0, self.plan_idx, :7]
+            if self.plan is not None and self.plan_idx < self.plan.position.shape[0]:
+                action_q = self.plan.position[self.plan_idx, :7]
                 self.plan_idx += 1
             else:
                 self.state = "OPEN_GRIPPER"
@@ -251,6 +260,8 @@ def main(
     from isaaclab_tasks.utils import parse_env_cfg
     from src.inference.termination_checker import get_checker
 
+    print("DONE IMPORTING ISAAC")
+
     # Initialize env
     env_cfg = parse_env_cfg(
         "DROID",
@@ -261,7 +272,7 @@ def main(
     
     instruction = "put the cube in the bowl"
     env_cfg.set_scene(scene)
-    env_cfg.episode_length_s = 60.0 
+    env_cfg.episode_length_s = 5.0 
     
     env = gym.make("DROID", cfg=env_cfg)
     
@@ -273,18 +284,23 @@ def main(
     
     task_checker = get_checker(scene, vlm=False)
 
+    # Use absolute path for video directory to avoid ffmpeg issues
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
+    video_dir = video_dir.resolve()
     video_dir.mkdir(parents=True, exist_ok=True)
     print(f"Saving videos to: {video_dir}")
     
     video = []
     max_steps = env.env.max_episode_length
+
+    print("STARTING EVALUATION")
     
     with torch.no_grad():
         for ep in range(episodes):
             task_completed = False
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
+                # print(f"Client state: {client.state}")
                 
                 if not headless:
                     cv2.imshow("Right Camera", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
@@ -303,8 +319,10 @@ def main(
                     break
 
             client.reset()
+            # Convert path to string for mediapy
+            video_path = str(video_dir / f"curobo_scene{scene}_ep{ep}.mp4")
             mediapy.write_video(
-                video_dir / f"curobo_scene{scene}_ep{ep}.mp4",
+                video_path,
                 video,
                 fps=15,
             )
