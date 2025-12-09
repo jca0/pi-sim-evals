@@ -42,3 +42,5 @@ entity is the team name
 ```bash
 export WANDB_ENTITY=jing-cao
 ```
+
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py pi05_droid_lora_finetune --exp-name=my_lora_experiment --overwrite --fsdp-devices 4 --batch-size 32
