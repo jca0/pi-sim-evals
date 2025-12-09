@@ -4,6 +4,7 @@ runs/
 assets/
 test_imgs/
 assets.zip
+output/
 
 
 # Byte-compiled / optimized / DLL files

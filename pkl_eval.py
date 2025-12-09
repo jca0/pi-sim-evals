@@ -32,7 +32,7 @@ from typing import Literal
 from src.inference.cutamp_jointpos import Client as CutampJointPosClient
 
 def main(
-        episodes:int = 10,
+        episodes:int = 1,
         headless: bool = True,
         scene: int = 1,
         ):
