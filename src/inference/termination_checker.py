@@ -9,7 +9,6 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 import os
-from src.inference.gemini_helpers import convert_np_to_bytes, parse_json
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
