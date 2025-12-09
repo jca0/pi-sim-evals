@@ -90,10 +90,7 @@ class CuroboClient:
 
     def plan_to_pose(self, current_q, target_pose):
         # Pad current_q (7 DOF) to 9 DOFs (7 arm + 2 gripper) for Curobo
-        start_state = torch.zeros((1, 9), device=self.device)
-        start_state[0, :7] = current_q
-        start_state[0, 7:] = 0.04 # Assume open gripper for planning
-        
+        start_state = current_q.unsqueeze(0)
         js = JointState.from_position(start_state)
         
         # Plan trajectory
@@ -114,13 +111,15 @@ class CuroboClient:
 
     def visualize(self, obs):
         # Create visualization similar to original script
-        img1 = image_tools.resize_with_pad(obs["right_image"], 224, 224)
-        img2 = image_tools.resize_with_pad(obs["wrist_image"], 224, 224)
+        right_image = obs["policy"]["external_cam"][0].cpu().numpy()
+        wrist_image = obs["policy"]["wrist_cam"][0].cpu().numpy()
+        img1 = image_tools.resize_with_pad(right_image, 224, 224)
+        img2 = image_tools.resize_with_pad(wrist_image, 224, 224)
         return np.concatenate([img1, img2], axis=1)
 
     def infer(self, obs, instruction):
         # Extract observations
-        joint_pos = torch.tensor(obs["joint_position"], device=self.device) # 7 DOFs
+        joint_pos = obs["policy"]["arm_joint_pos"][0].to(self.device) # 7 DOFs
         action_q = joint_pos.clone()
         
         # Helper to construct full action
