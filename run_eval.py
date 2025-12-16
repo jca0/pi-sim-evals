@@ -136,21 +136,21 @@ def main(
                 video,
                 fps=15,
             )
-            # added right and wrist videos
-            mediapy.write_video(
-                video_dir / f"{policy}_scene{scene}_ep{ep}_right.mp4",
-                right_video,
-                fps=15,
-            )
-            mediapy.write_video(
-                video_dir / f"{policy}_scene{scene}_ep{ep}_wrist.mp4",
-                wrist_video,
-                fps=15,
-            )
+            # # added right and wrist videos
+            # mediapy.write_video(
+            #     video_dir / f"{policy}_scene{scene}_ep{ep}_right.mp4",
+            #     right_video,
+            #     fps=15,
+            # )
+            # mediapy.write_video(
+            #     video_dir / f"{policy}_scene{scene}_ep{ep}_wrist.mp4",
+            #     wrist_video,
+            #     fps=15,
+            # )
             video = []
-            # reset right and wrist videos
-            right_video = []
-            wrist_video = []
+            # # reset right and wrist videos
+            # right_video = []
+            # wrist_video = []
 
     env.close()
     simulation_app.close()
