@@ -85,6 +85,12 @@ def main(
 
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
+
+    sim_env = env.env
+    wrist_cam = sim_env.scene["wrist_cam"]
+    # intrinsics from wrist cam
+    intrinsic_matrix = wrist_cam.data.intrinsic_matrices[0].cpu().numpy()
+
     client = DroidJointPosClient(policy=policy)
     task_checker = get_checker(scene, vlm=False)
 
@@ -99,6 +105,12 @@ def main(
         for ep in range(episodes):
             task_completed = False
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
+                # depth from wrist cam
+                depth = wrist_cam.data.output["distance_to_image_plane"][0]
+                # extrinsics: T_world -> wrist_cam
+                pos_w = wrist_cam.data.pos_w[0].cpu().numpy()
+                quat_w_ros = wrist_cam.data.quat_w_ros[0].cpu().numpy()
+
                 ret = client.infer(obs, instruction)
                 if not headless:
                     cv2.imshow("Right Camera", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
