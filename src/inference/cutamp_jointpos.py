@@ -22,10 +22,10 @@ from curobo.util_file import get_robot_configs_path, join_path, load_yaml
 from curobo.wrap.reacher.motion_gen import MotionGen, MotionGenConfig
 
 class Client(InferenceClient):
-    def __init__(self, 
+    def __init__(self, file_dir: str = "pkl_trajectories", file_name: str = "jing_cutamp_plan_v2.pkl"
                 ) -> None:
         
-        with open("jing_cutamp_plan_v2.pkl", "rb") as f:
+        with open(os.path.join(file_dir, file_name), "rb") as f:
             self.curobo_plan = pickle.load(f)
         
         self.current_plan_step = 0

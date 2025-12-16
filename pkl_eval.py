@@ -1,23 +1,3 @@
-"""
-Example script for running 10 rollouts of a DROID policy on the example environment.
-
-Usage:
-
-First, make sure you download the simulation assets and unpack them into the root directory of this package.
-
-Then, in a separate terminal, launch the policy server on localhost:8000 
--- make sure to set XLA_PYTHON_CLIENT_MEM_FRACTION to avoid JAX hogging all the GPU memory.
-
-For example, to launch a pi0-FAST-DROID policy (with joint position control), 
-run the command below in a separate terminal from the openpi "karl/droid_policies" branch:
-
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi0_fast_droid_jointpos --policy.dir=s3://openpi-assets-simeval/pi0_fast_droid_jointpos
-
-Finally, run the evaluation script:
-
-python run_eval.py --episodes 10 --headless
-"""
-
 import tyro
 import argparse
 import gymnasium as gym
@@ -82,7 +62,7 @@ def main(
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
 
-    client = CutampJointPosClient()
+    client = CutampJointPosClient(file_name="jing_cutamp_plan_v2.pkl")
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
