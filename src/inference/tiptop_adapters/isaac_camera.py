@@ -2,6 +2,11 @@ import numpy as np
 from dataclasses import dataclass
 from jaxtyping import Float, UInt8
 
+@dataclass
+class IsaacSimFrame:
+    timestamp: float # probably don't need?
+    rgb: UInt8[np.ndarray, "h w 3"]
+    depth: Float[np.ndarray, "h w"] | None
 
 @dataclass
 class IsaacSimIntrinsics:
@@ -11,12 +16,6 @@ class IsaacSimIntrinsics:
 class IsaacSimExtrinsics:
     R: Float[np.ndarray, "3 3"]
     T: Float[np.ndarray, "3"]
-
-@dataclass
-class IsaacSimFrame:
-    rgb: UInt8[np.ndarray, "H W 3"]
-    depth: Float[np.ndarray, "H W"] | None
-    pointcloud: Float[np.ndarray, "H W 3"] | None = None
 
 class IsaacSimCamera:
     def __init__(self, intrinsics: np.ndarray, extrinsics: np.ndarray, frame_extractor):
@@ -34,5 +33,5 @@ class IsaacSimCamera:
 
     def read_camera(self, obs_dict) -> IsaacSimFrame:
         rgb, depth = self._frame_extractor(obs_dict)
-        return IsaacSimFrame(rgb=rgb, depth=depth, pointcloud=None)
+        return IsaacSimFrame(rgb=rgb, depth=depth)
     
