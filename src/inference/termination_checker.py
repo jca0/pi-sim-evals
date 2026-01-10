@@ -5,8 +5,8 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.assets import RigidObject
 import numpy as np
 import json
-from google import genai
-from google.genai import types
+# from google import genai
+# from google.genai import types
 from dotenv import load_dotenv
 import os
 
@@ -87,46 +87,46 @@ class TaskChecker:
             },
         }
 
-    def gemini_check(self, obs: dict):
-        load_dotenv()
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        model_id = "gemini-robotics-er-1.5-preview"
+    # def gemini_check(self, obs: dict):
+    #     load_dotenv()
+    #     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    #     model_id = "gemini-robotics-er-1.5-preview"
         
-        prompt = f"""
-        You are a task completion checker for a robot.
-        You are given a task and two images of the robot's view of the scene.
-        You need to check if the task is complete.
-        The task is: {self.instructions[self.scene]}
-        Return a boolean value in the following json format: {{"is_complete": <boolean>}}.
-        The boolean value should be True if the task is complete, False otherwise.
-        """
-        right_image = obs["policy"]["external_cam"][0].clone().detach().cpu().numpy()
-        wrist_image = obs["policy"]["wrist_cam"][0].clone().detach().cpu().numpy()
-        exterior_img = convert_np_to_bytes(right_image)
-        wrist_img = convert_np_to_bytes(wrist_image)
-        exterior_img_bytes = types.Part.from_bytes(
-            data=exterior_img,
-            mime_type='image/png',
-        )
-        wrist_img_bytes = types.Part.from_bytes(
-            data=wrist_img,
-            mime_type='image/png',
-        )
+    #     prompt = f"""
+    #     You are a task completion checker for a robot.
+    #     You are given a task and two images of the robot's view of the scene.
+    #     You need to check if the task is complete.
+    #     The task is: {self.instructions[self.scene]}
+    #     Return a boolean value in the following json format: {{"is_complete": <boolean>}}.
+    #     The boolean value should be True if the task is complete, False otherwise.
+    #     """
+    #     right_image = obs["policy"]["external_cam"][0].clone().detach().cpu().numpy()
+    #     wrist_image = obs["policy"]["wrist_cam"][0].clone().detach().cpu().numpy()
+    #     exterior_img = convert_np_to_bytes(right_image)
+    #     wrist_img = convert_np_to_bytes(wrist_image)
+    #     exterior_img_bytes = types.Part.from_bytes(
+    #         data=exterior_img,
+    #         mime_type='image/png',
+    #     )
+    #     wrist_img_bytes = types.Part.from_bytes(
+    #         data=wrist_img,
+    #         mime_type='image/png',
+    #     )
 
-        response = client.models.generate_content(
-            model=model_id,
-            contents=[
-                exterior_img_bytes,
-                wrist_img_bytes,
-                prompt,
-            ],
-            config=types.GenerateContentConfig(
-                temperature=0.5,
-                thinking_config=types.ThinkingConfig(thinking_budget=0),
-            )
-        )
-        parsed = parse_json(response.text)
-        return json.loads(parsed)["is_complete"]
+    #     response = client.models.generate_content(
+    #         model=model_id,
+    #         contents=[
+    #             exterior_img_bytes,
+    #             wrist_img_bytes,
+    #             prompt,
+    #         ],
+    #         config=types.GenerateContentConfig(
+    #             temperature=0.5,
+    #             thinking_config=types.ThinkingConfig(thinking_budget=0),
+    #         )
+    #     )
+    #     parsed = parse_json(response.text)
+    #     return json.loads(parsed)["is_complete"]
 
     def check(self, env: ManagerBasedRLEnv, obs: dict):
         if self.vlm:
