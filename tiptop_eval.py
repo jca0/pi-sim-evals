@@ -1,43 +1,52 @@
-"""
-Example script for running 10 rollouts of a DROID policy on the example environment.
+"""Evaluation script that uses the tiptop websocket server for planning.
+
+This script connects to a running tiptop websocket server, sends initial
+observations (RGB, depth, camera params, task instruction), receives a
+trajectory plan, and executes it in the Isaac Sim environment.
 
 Usage:
+    # First, start the tiptop websocket server:
+    # (in tiptop-robot) pixi run python -m tiptop.websocket_server --port 8765
 
-First, make sure you download the simulation assets and unpack them into the root directory of this package.
-
-Then, in a separate terminal, launch the policy server on localhost:8000 
--- make sure to set XLA_PYTHON_CLIENT_MEM_FRACTION to avoid JAX hogging all the GPU memory.
-
-For example, to launch a pi0-FAST-DROID policy (with joint position control), 
-run the command below in a separate terminal from the openpi "karl/droid_policies" branch:
-
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi0_fast_droid_jointpos --policy.dir=s3://openpi-assets-simeval/pi0_fast_droid_jointpos
-
-Finally, run the evaluation script:
-
-python run_eval.py --episodes 10 --headless
+    # Then run this evaluation:
+    uv run python tiptop_ws_eval.py --scene 1 --ws-host localhost --ws-port 8765
 """
 
-import tyro
 import argparse
-import gymnasium as gym
-import torch
-import cv2
-import mediapy
 from datetime import datetime
 from pathlib import Path
-from tqdm import tqdm
 from typing import Literal
+
+import cv2
+import gymnasium as gym
+import mediapy
+import torch
+import tyro
+from tqdm import tqdm
+
+from src.inference.tiptop_websocket import TiptopWebsocketClient
 
 
 def main(
-        episodes:int = 10,
-        headless: bool = True,
-        scene: int = 1,
-        ):
-    # launch omniverse app with arguments (inside function to prevent overriding tyro)
+    episodes: int = 1,
+    headless: bool = True,
+    scene: int = 1,
+    ws_host: str = "localhost",
+    ws_port: int = 8765,
+):
+    """Run evaluation using tiptop websocket server.
+
+    Args:
+        episodes: Number of episodes to run
+        headless: Run without GUI
+        scene: Scene number (1-6)
+        ws_host: Tiptop websocket server host
+        ws_port: Tiptop websocket server port
+    """
+    # Launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
-    parser = argparse.ArgumentParser(description="Tutorial on creating an empty stage.")
+
+    parser = argparse.ArgumentParser(description="Tiptop websocket evaluation")
     AppLauncher.add_app_launcher_args(parser)
     args_cli, _ = parser.parse_known_args()
     args_cli.enable_cameras = True
@@ -46,12 +55,8 @@ def main(
     simulation_app = app_launcher.app
 
     # All IsaacLab dependent modules should be imported after the app is launched
-    import src.environments # noqa: F401
+    import src.environments  # noqa: F401
     from isaaclab_tasks.utils import parse_env_cfg
-    from src.inference.termination_checker import get_checker
-    from src.inference.tiptop_adapters.isaac_robot_client import IsaacSimRobotClient
-    from src.inference.tiptop_adapters.isaac_camera import IsaacSimCamera, IsaacSimFrame, IsaacSimIntrinsics, IsaacSimExtrinsics
-
 
     # Initialize the env
     env_cfg = parse_env_cfg(
@@ -60,6 +65,8 @@ def main(
         num_envs=1,
         use_fabric=True,
     )
+
+    # Get task instruction for scene
     instruction = None
     match scene:
         case 1:
@@ -68,7 +75,7 @@ def main(
             instruction = "put the can in the mug"
         case 3:
             instruction = "put banana in the bin"
-        case 4: 
+        case 4:
             instruction = "put the meat can on the sugar box"
         case 5:
             instruction = "rearrange the cubes so that they spell 'REX'"
@@ -76,74 +83,52 @@ def main(
             instruction = "stack all the cubes on top of each other"
         case _:
             raise ValueError(f"Scene {scene} not supported")
-        
+
     env_cfg.set_scene(scene)
-    env_cfg.episode_length_s = 30.0 # LENGTH OF EPISODE
+    env_cfg.episode_length_s = 30.0  # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
 
     obs, _ = env.reset()
-    obs, _ = env.reset() # need second render cycle to get correctly loaded materials
-    # client = DroidJointPosClient()
-    wrist_cam = IsaacSimCamera(env.env.scene["wrist_cam"])
-    
-    client = IsaacSimRobotClient(env.env)
-    task_checker = get_checker(scene, vlm=False)
+    obs, _ = env.reset()  # Need second render cycle to get correctly loaded materials
+
+    # Connect to tiptop websocket server
+    print(f"Connecting to tiptop server at ws://{ws_host}:{ws_port}...")
+    client = TiptopWebsocketClient(host=ws_host, port=ws_port)
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
     video = []
-    right_video = []
-    wrist_video = []
-    ep = 0
     max_steps = env.env.max_episode_length
+
     with torch.no_grad():
         for ep in range(episodes):
-            obs, _ = env.reset()
-            task_completed = False
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
                 if not headless:
-                    cv2.imshow("Right Camera", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
+                    cv2.imshow("Camera View", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
                 video.append(ret["viz"])
-                right_video.append(ret["right_image"])
-                wrist_video.append(ret["wrist_image"])
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
-
-                if i % 30 == 0 and not task_completed:
-                    task_completed = task_checker.check(env.env, obs)
-                    if task_completed:
-                        print("TASK COMPLETED")
-                        term = True
 
                 if term or trunc:
                     break
 
             client.reset()
             mediapy.write_video(
-                video_dir / f"{policy}_scene{scene}_ep{ep}.mp4",
+                video_dir / f"tiptop_scene{scene}_ep{ep}.mp4",
                 video,
                 fps=15,
             )
-            # # added right and wrist videos
-            # mediapy.write_video(
-            #     video_dir / f"{policy}_scene{scene}_ep{ep}_right.mp4",
-            #     right_video,
-            #     fps=15,
-            # )
-            # mediapy.write_video(
-            #     video_dir / f"{policy}_scene{scene}_ep{ep}_wrist.mp4",
-            #     wrist_video,
-            #     fps=15,
-            # )
             video = []
-            # # reset right and wrist videos
-            # right_video = []
-            # wrist_video = []
+            print(f"Saved video to {video_dir / f'tiptop_scene{scene}_ep{ep}.mp4'}")
 
+    client.close()
     env.close()
     simulation_app.close()
 
+
 if __name__ == "__main__":
-    args = tyro.cli(main)
+    tyro.cli(main)
+
+
