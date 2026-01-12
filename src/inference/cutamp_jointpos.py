@@ -12,7 +12,7 @@ import sys
 import os
 import matplotlib.pyplot as plt
 
-CUROBO_PATH = "/home/ubuntu/curobo/src"
+CUROBO_PATH = "/home/ubuntu/tiptop-robot/curobo/src"
 if CUROBO_PATH not in sys.path:
     sys.path.insert(0, CUROBO_PATH)
 
@@ -143,43 +143,43 @@ class Client(InferenceClient):
             self.actual_history.append(curr_obs["joint_position"])
 
         # PLOT ACTUAL VS EXPECTED JOINT POSITIONS
-        if self.current_trajectory is not None and self.current_waypoint_idx >= len(self.current_trajectory):
-            actual_arr = np.array(self.actual_history)
-            expected_arr = self.current_trajectory
+        # if self.current_trajectory is not None and self.current_waypoint_idx >= len(self.current_trajectory):
+            # actual_arr = np.array(self.actual_history)
+            # expected_arr = self.current_trajectory
             
-            if len(actual_arr) > 1:
-                fig, axs = plt.subplots(7, 1, figsize=(10, 15))
-                steps = np.arange(len(expected_arr))
+            # if len(actual_arr) > 1:
+            #     fig, axs = plt.subplots(7, 1, figsize=(10, 15))
+            #     steps = np.arange(len(expected_arr))
                 
-                for joint_idx in range(7):
-                    axs[joint_idx].plot(steps, expected_arr[:, joint_idx], 'r--', label='Expected')
-                    # Use actual_arr[1:] to match the steps resulting from the actions
-                    axs[joint_idx].plot(steps, actual_arr[:, joint_idx], 'b-', label='Actual')
-                    axs[joint_idx].set_title(f'Joint {joint_idx}')
-                    axs[joint_idx].legend()
+            #     for joint_idx in range(7):
+            #         axs[joint_idx].plot(steps, expected_arr[:, joint_idx], 'r--', label='Expected')
+            #         # Use actual_arr[1:] to match the steps resulting from the actions
+            #         axs[joint_idx].plot(steps, actual_arr[:, joint_idx], 'b-', label='Actual')
+            #         axs[joint_idx].set_title(f'Joint {joint_idx}')
+            #         axs[joint_idx].legend()
                 
-                plt.tight_layout()
-                plt.savefig(f"output/traj_plot_step_{self.current_plan_step}.png")
-                plt.close()
+            #     # plt.tight_layout()
+            #     # plt.savefig(f"output/traj_plot_step_{self.current_plan_step}.png")
+            #     # plt.close()
 
-                desired_final_joints = expected_arr[-1]  # Last waypoint
-                actual_final_joints = actual_arr[-1]     # Last actual position
+            #     desired_final_joints = expected_arr[-1]  # Last waypoint
+            #     actual_final_joints = actual_arr[-1]     # Last actual position
                 
-                # Compute forward kinematics
-                desired_ee_pose = self.compute_fk(desired_final_joints)
-                actual_ee_pose = self.compute_fk(actual_final_joints)
+            #     # Compute forward kinematics
+            #     desired_ee_pose = self.compute_fk(desired_final_joints)
+            #     actual_ee_pose = self.compute_fk(actual_final_joints)
                 
-                # Compute errors
-                errors = self.compute_pose_error(
-                    {'position': desired_ee_pose['position'][0], 'quaternion': desired_ee_pose['quaternion'][0]},
-                    {'position': actual_ee_pose['position'][0], 'quaternion': actual_ee_pose['quaternion'][0]}
-                )
+            #     # Compute errors
+            #     errors = self.compute_pose_error(
+            #         {'position': desired_ee_pose['position'][0], 'quaternion': desired_ee_pose['quaternion'][0]},
+            #         {'position': actual_ee_pose['position'][0], 'quaternion': actual_ee_pose['quaternion'][0]}
+            #     )
                 
-                print(f"\ntrajectory {self.current_plan_step} end-effector errors:")
-                print(f"translation error: {errors['translation_error']*1000:.2f} mm")
-                print(f"rotation error: {np.degrees(errors['rotation_error']):.2f} degrees")
+            #     print(f"\ntrajectory {self.current_plan_step} end-effector errors:")
+            #     print(f"translation error: {errors['translation_error']*1000:.2f} mm")
+            #     print(f"rotation error: {np.degrees(errors['rotation_error']):.2f} degrees")
             
-            self.actual_history = []
+            # self.actual_history = []
         # END PLOTTING CODE
         
         # Check if we need to load a new action from the plan
