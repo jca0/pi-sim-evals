@@ -18,20 +18,31 @@ class IsaacSimExtrinsics:
     T: Float[np.ndarray, "3"]
 
 class IsaacSimCamera:
-    def __init__(self, intrinsics: np.ndarray, extrinsics: np.ndarray, frame_extractor):
-        # frame extractor is a function that takes in a dictionary of observations and returns a tuple of (rgb, depth)
-        self._intrinsics = IsaacSimIntrinsics(K=np.asarray(intrinsics, dtype=np.float32))
-        self._extrinsics = IsaacSimExtrinsics(R=np.asarray(extrinsics, dtype=np.float32), T=np.asarray(extrinsics, dtype=np.float32))
-        self._frame_extractor = frame_extractor
-        self.serial = "isaac_sim_cam"
+    def __init__(self, camera):
+        """
+        Args:
+            camera: the camera object from the environment
+        """
+        self.camera = camera
+        # self.instrinsics_matrix = camera.data.intrinsic_matrices[0].cpu().numpy()
+        # self.pos_w = camera.data.pos_w[0].cpu().numpy()
+        # self.quat_w_ros = camera.data.quat_w_ros[0].cpu().numpy()
+        # self.depth = camera.data.output["distance_to_image_plane"][0]
 
-    def get_intrinsics(self) -> IsaacSimIntrinsics:
-        return self._intrinsics
+    def get_intrinsics(self):
+        return self.camera.data.intrinsic_matrices[0].cpu().numpy()
 
-    def get_extrinsics(self) -> IsaacSimExtrinsics:
-        return self._extrinsics
+    def get_pos_w(self):
+        return self.camera.data.pos_w[0].cpu().numpy()
 
-    def read_camera(self, obs_dict) -> IsaacSimFrame:
-        rgb, depth = self._frame_extractor(obs_dict)
+    def get_quat_w_ros(self):
+        return self.camera.data.quat_w_ros[0].cpu().numpy()
+
+    def get_depth(self):
+        return self.camera.data.output["distance_to_image_plane"][0]
+
+    def read_camera(self):
+        rgb = self.camera.data.output["rgb"][0]
+        depth = self.camera.data.output["distance_to_image_plane"][0]
         return IsaacSimFrame(rgb=rgb, depth=depth)
     
