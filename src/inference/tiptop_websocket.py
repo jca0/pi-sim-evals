@@ -28,9 +28,16 @@ class TiptopWebsocketClient(InferenceClient):
         host: str = "localhost",
         port: int = 8765,
         gripper_action_steps: int = 20,
+        sim_control_hz: float = 15.0,
+        curobo_interp_hz: float = 50.0,
     ) -> None:
         self._uri = f"ws://{host}:{port}"
         self._gripper_action_steps = gripper_action_steps
+        
+        # Compute waypoint stride to match sim control rate with CuRobo's interpolation rate
+        # CuRobo default is ~50 Hz, sim runs at 15 Hz, so we skip ~3 waypoints per step
+        self._waypoint_stride = max(1, int(round(curobo_interp_hz / sim_control_hz)))
+        _log.info(f"Waypoint stride: {self._waypoint_stride} (curobo={curobo_interp_hz}Hz, sim={sim_control_hz}Hz)")
 
         self._ws: Optional[websockets.sync.client.ClientConnection] = None
         self._server_metadata: dict = {}
@@ -96,7 +103,9 @@ class TiptopWebsocketClient(InferenceClient):
             _log.info(f"Received plan with {len(self._plan)} steps in {elapsed:.1f}s")
             for i, step in enumerate(self._plan):
                 if step["type"] == "trajectory":
-                    _log.info(f"  Step {i}: trajectory ({len(step['positions'])} waypoints)")
+                    orig_len = len(step['positions'])
+                    subsampled_len = len(step['positions'][::self._waypoint_stride])
+                    _log.info(f"  Step {i}: trajectory ({orig_len} -> {subsampled_len} waypoints after subsampling)")
                 else:
                     _log.info(f"  Step {i}: gripper {step['action']}")
         else:
@@ -203,7 +212,10 @@ class TiptopWebsocketClient(InferenceClient):
                 action = np.concatenate([joint_pos.flatten(), np.array([gripper_val])])
                 return self._make_result(action, curr_obs)
             else:
-                self._current_trajectory = step["positions"]
+                # Subsample trajectory to match sim control rate
+                full_trajectory = step["positions"]
+                self._current_trajectory = full_trajectory[::self._waypoint_stride]
+                _log.debug(f"Subsampled trajectory: {len(full_trajectory)} -> {len(self._current_trajectory)} waypoints")
                 self._current_waypoint_idx = 0
                 self._current_plan_step += 1
 
