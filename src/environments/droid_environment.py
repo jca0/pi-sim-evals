@@ -192,6 +192,39 @@ def gripper_pos(
     return joint_pos
 
 
+def wrist_cam_depth(
+    env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg = SceneEntityCfg("wrist_cam")
+):
+    """Get wrist camera depth image."""
+    sensor = env.scene[sensor_cfg.name]
+    depth = sensor.data.output["distance_to_image_plane"]
+    return depth
+
+
+def wrist_cam_intrinsics(
+    env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg = SceneEntityCfg("wrist_cam")
+):
+    """Get wrist camera intrinsic matrix."""
+    sensor = env.scene[sensor_cfg.name]
+    return sensor.data.intrinsic_matrices
+
+
+def wrist_cam_pos_w(
+    env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg = SceneEntityCfg("wrist_cam")
+):
+    """Get wrist camera position in world frame."""
+    sensor = env.scene[sensor_cfg.name]
+    return sensor.data.pos_w
+
+
+def wrist_cam_quat_w(
+    env: ManagerBasedRLEnv, sensor_cfg: SceneEntityCfg = SceneEntityCfg("wrist_cam")
+):
+    """Get wrist camera quaternion in world frame (w, x, y, z)."""
+    sensor = env.scene[sensor_cfg.name]
+    return sensor.data.quat_w_ros  # ROS convention: x, y, z, w
+
+
 @configclass
 class ObservationCfg:
     @configclass
@@ -218,6 +251,10 @@ class ObservationCfg:
                     "normalize": False,
                     }
                 )
+        wrist_depth = ObsTerm(func=wrist_cam_depth)
+        wrist_intrinsics = ObsTerm(func=wrist_cam_intrinsics)
+        wrist_cam_pos_w = ObsTerm(func=wrist_cam_pos_w)
+        wrist_cam_quat_w = ObsTerm(func=wrist_cam_quat_w)
 
         def __post_init__(self) -> None:
             self.enable_corruption = False
