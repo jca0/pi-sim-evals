@@ -24,6 +24,7 @@ import gymnasium as gym
 import torch
 import cv2
 import mediapy
+import h5py
 from datetime import datetime
 from pathlib import Path
 from tqdm import tqdm
@@ -82,14 +83,23 @@ def main(
     env_cfg.set_scene(scene)
     env_cfg.episode_length_s = 30.0 # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
+    wrist_camera = env.env.scene["wrist_cam"]
+    # intrinsics = wrist_camera.data.intrinsic_matrices[0].cpu().numpy()
+    # depth = wrist_camera.data.output["distance_to_image_plane"][0]
+    # rgb = wrist_camera.data.output["rgb"][0]
+    # pos_w = wrist_camera.data.pos_w[0].cpu().numpy()
+    # quat_w_ros = wrist_camera.data.quat_w_ros[0].cpu().numpy()
 
+
+    # Create output directory
+    video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
+    video_dir.mkdir(parents=True, exist_ok=True)
+
+    
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
     client = DroidJointPosClient(policy=policy)
     task_checker = get_checker(scene, vlm=False)
-
-    video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
-    video_dir.mkdir(parents=True, exist_ok=True)
     video = []
     right_video = []
     wrist_video = []
