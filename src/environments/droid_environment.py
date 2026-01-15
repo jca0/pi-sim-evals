@@ -222,7 +222,7 @@ def wrist_cam_quat_w(
 ):
     """Get wrist camera quaternion in world frame (w, x, y, z)."""
     sensor = env.scene[sensor_cfg.name]
-    return sensor.data.quat_w_ros  # ROS convention: x, y, z, w
+    return sensor.data.quat_w_ros  # ROS convention: w, x, y, z
 
 
 @configclass
@@ -319,4 +319,3 @@ class EnvCfg(ManagerBasedRLEnvCfg):
     
     def set_scene(self, scene_name: str):
         self.scene.dynamic_scene(scene_name)
-

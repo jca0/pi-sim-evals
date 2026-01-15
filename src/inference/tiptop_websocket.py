@@ -170,8 +170,9 @@ class TiptopWebsocketClient(InferenceClient):
         return intrinsics, world_from_cam
 
     def _pose_to_matrix(self, pos: np.ndarray, quat: np.ndarray) -> np.ndarray:
-        """Convert pos + quat (xyzw) to 4x4 matrix."""
-        R = Rotation.from_quat(quat).as_matrix()
+        """Convert pos + quat (wxyz) to 4x4 matrix."""
+        quat_xyzw = np.array([quat[1], quat[2], quat[3], quat[0]], dtype=np.float32)
+        R = Rotation.from_quat(quat_xyzw).as_matrix()
         T = np.eye(4, dtype=np.float32)
         T[:3, :3] = R
         T[:3, 3] = pos
