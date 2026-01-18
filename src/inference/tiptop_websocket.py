@@ -103,9 +103,11 @@ class TiptopWebsocketClient(InferenceClient):
             _log.info(f"Received plan with {len(self._plan)} steps in {elapsed:.1f}s")
             for i, step in enumerate(self._plan):
                 if step["type"] == "trajectory":
-                    orig_len = len(step['positions'])
-                    subsampled_len = len(step['positions'][::self._waypoint_stride])
-                    _log.info(f"  Step {i}: trajectory ({orig_len} -> {subsampled_len} waypoints after subsampling)")
+                    orig_len = len(step["positions"])
+                    subsampled_len = len(self._subsample_trajectory(step["positions"]))
+                    _log.info(
+                        f"  Step {i}: trajectory ({orig_len} -> {subsampled_len} waypoints after subsampling)"
+                    )
                 else:
                     _log.info(f"  Step {i}: gripper {step['action']}")
         else:
@@ -178,6 +180,15 @@ class TiptopWebsocketClient(InferenceClient):
         T[:3, 3] = pos
         return T
 
+    def _subsample_trajectory(self, trajectory: np.ndarray) -> np.ndarray:
+        """Subsample waypoints while always keeping the final pose."""
+        if self._waypoint_stride <= 1 or len(trajectory) == 0:
+            return trajectory
+        indices = np.arange(0, len(trajectory), self._waypoint_stride)
+        if indices[-1] != len(trajectory) - 1:
+            indices = np.append(indices, len(trajectory) - 1)
+        return trajectory[indices]
+
     def _step_plan(self, curr_obs: dict) -> dict:
         # Handle pending gripper action
         if self._gripper_action_pending is not None:
@@ -215,8 +226,10 @@ class TiptopWebsocketClient(InferenceClient):
             else:
                 # Subsample trajectory to match sim control rate
                 full_trajectory = step["positions"]
-                self._current_trajectory = full_trajectory[::self._waypoint_stride]
-                _log.debug(f"Subsampled trajectory: {len(full_trajectory)} -> {len(self._current_trajectory)} waypoints")
+                self._current_trajectory = self._subsample_trajectory(full_trajectory)
+                _log.debug(
+                    f"Subsampled trajectory: {len(full_trajectory)} -> {len(self._current_trajectory)} waypoints"
+                )
                 self._current_waypoint_idx = 0
                 self._current_plan_step += 1
 
