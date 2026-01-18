@@ -76,11 +76,11 @@ def main(
         case 3:
             instruction = "put banana in the bin"
         case 4:
-            instruction = "put the meat can on the sugar box"
+            instruction = "put the yellow mustard bottle in the bowl"
         case 5:
             instruction = "rearrange the cubes so that they spell 'REX'"
         case 6:
-            instruction = "stack all the cubes on top of each other"
+            instruction = "stack the cubes"
         case _:
             raise ValueError(f"Scene {scene} not supported")
 
@@ -90,6 +90,8 @@ def main(
 
     obs, _ = env.reset()
     obs, _ = env.reset()  # Need second render cycle to get correctly loaded materials
+    wrist_cam = env.env.scene["wrist_cam"]
+    intrinsic_matrix = wrist_cam.data.intrinsic_matrices[0].cpu().numpy()
 
     # Connect to tiptop websocket server
     print(f"Connecting to tiptop server at ws://{ws_host}:{ws_port}...")
@@ -104,6 +106,11 @@ def main(
         for ep in range(episodes):
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
+                depth = wrist_cam.data.output["distance_to_image_plane"][0]
+                # extrinsics: T_world -> wrist_cam
+                pos_w = wrist_cam.data.pos_w[0].cpu().numpy()
+                quat_w_ros = wrist_cam.data.quat_w_ros[0].cpu().numpy()
+
                 if not headless:
                     cv2.imshow("Camera View", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
