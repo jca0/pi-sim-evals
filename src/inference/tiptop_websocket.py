@@ -169,6 +169,10 @@ class TiptopWebsocketClient(InferenceClient):
             _log.warning("Camera extrinsics not found, using identity transform")
             world_from_cam = np.eye(4, dtype=np.float32)
 
+        # offset point cloud to match TipTop grasp_frame (relative to gripper base).
+        world_from_cam = world_from_cam.copy()
+        world_from_cam[:3, 3] -= np.array([0.0, 0.0, 0.015], dtype=np.float32)
+
         return intrinsics, world_from_cam
 
     def _pose_to_matrix(self, pos: np.ndarray, quat: np.ndarray) -> np.ndarray:
