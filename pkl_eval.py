@@ -1,20 +1,144 @@
-import tyro
 import argparse
-import gymnasium as gym
-import torch
-import cv2
-import mediapy
+import pickle
 from datetime import datetime
 from pathlib import Path
-from tqdm import tqdm
-from typing import Literal
+from typing import Optional
 
-from src.inference.cutamp_jointpos import Client as CutampJointPosClient
+import cv2
+import gymnasium as gym
+import mediapy
+import numpy as np
+import torch
+import tyro
+from tqdm import tqdm
+from openpi_client import image_tools
+
+
+class LocalPlanClient:
+    """Step through a cuTAMP plan using TiptopWebsocketClient-style execution."""
+
+    def __init__(
+        self,
+        plan: list,
+        gripper_action_steps: int = 20,
+        sim_control_hz: float = 15.0,
+        curobo_interp_hz: float = 50.0,
+    ) -> None:
+        self._plan = plan
+        self._gripper_action_steps = gripper_action_steps
+        self._waypoint_stride = max(1, int(round(curobo_interp_hz / sim_control_hz)))
+
+        self._current_plan_step = 0
+        self._current_trajectory: Optional[np.ndarray] = None
+        self._current_waypoint_idx = 0
+        self._gripper_action_pending: Optional[str] = None
+        self._gripper_action_steps_remaining = 0
+        self._last_gripper_state = 0.0
+
+    def reset(self) -> None:
+        self._current_plan_step = 0
+        self._current_trajectory = None
+        self._current_waypoint_idx = 0
+        self._gripper_action_pending = None
+        self._gripper_action_steps_remaining = 0
+        self._last_gripper_state = 0.0
+
+    def infer(self, obs: dict, instruction: str) -> dict:
+        del instruction
+        curr_obs = self._extract_observation(obs)
+        return self._step_plan(curr_obs)
+
+    def _step_plan(self, curr_obs: dict) -> dict:
+        if self._gripper_action_pending is not None:
+            if self._gripper_action_steps_remaining > 0:
+                self._gripper_action_steps_remaining -= 1
+                joint_pos = curr_obs["joint_position"]
+                gripper_val = 1.0 if self._gripper_action_pending == "close" else 0.0
+                self._last_gripper_state = gripper_val
+                action = np.concatenate([joint_pos.flatten(), np.array([gripper_val])])
+                return self._make_result(action, curr_obs)
+            else:
+                self._last_gripper_state = 1.0 if self._gripper_action_pending == "close" else 0.0
+                self._gripper_action_pending = None
+                self._current_plan_step += 1
+
+        if self._current_trajectory is None or self._current_waypoint_idx >= len(self._current_trajectory):
+            if self._plan is None or self._current_plan_step >= len(self._plan):
+                joint_pos = curr_obs["joint_position"]
+                gripper_val = (
+                    curr_obs["gripper_position"][0]
+                    if len(curr_obs["gripper_position"]) > 0
+                    else self._last_gripper_state
+                )
+                action = np.concatenate([joint_pos.flatten(), np.array([gripper_val])])
+                return self._make_result(action, curr_obs)
+
+            step = self._plan[self._current_plan_step]
+            if step["type"] == "gripper":
+                action = step["action"]
+                if action not in {"open", "close"}:
+                    raise ValueError(f"Unknown gripper action: {action}")
+                self._gripper_action_pending = action
+                self._gripper_action_steps_remaining = self._gripper_action_steps
+                joint_pos = curr_obs["joint_position"]
+                gripper_val = 1.0 if action == "close" else 0.0
+                self._last_gripper_state = gripper_val
+                action = np.concatenate([joint_pos.flatten(), np.array([gripper_val])])
+                return self._make_result(action, curr_obs)
+
+            if "positions" in step:
+                full_trajectory = np.asarray(step["positions"], dtype=np.float32)
+            else:
+                full_trajectory = step["plan"].position.cpu().numpy()
+            self._current_trajectory = self._subsample_trajectory(full_trajectory)
+            self._current_waypoint_idx = 0
+            self._current_plan_step += 1
+
+        waypoint = self._current_trajectory[self._current_waypoint_idx]
+        self._current_waypoint_idx += 1
+        if waypoint.shape[0] == 7:
+            action = np.concatenate([waypoint, np.array([self._last_gripper_state])])
+        else:
+            action = waypoint
+        return self._make_result(action, curr_obs)
+
+    def _subsample_trajectory(self, trajectory: np.ndarray) -> np.ndarray:
+        if self._waypoint_stride <= 1 or len(trajectory) == 0:
+            return trajectory
+        indices = np.arange(0, len(trajectory), self._waypoint_stride)
+        if indices[-1] != len(trajectory) - 1:
+            indices = np.append(indices, len(trajectory) - 1)
+        return trajectory[indices]
+
+    def _make_result(self, action: np.ndarray, curr_obs: dict) -> dict:
+        if image_tools is not None:
+            img1 = image_tools.resize_with_pad(curr_obs["right_image"], 224, 224)
+            img2 = image_tools.resize_with_pad(curr_obs["wrist_image"], 224, 224)
+            viz = np.concatenate([img1, img2], axis=1)
+        else:
+            viz = curr_obs["wrist_image"]
+        return {
+            "action": action,
+            "viz": viz,
+            "right_image": curr_obs["right_image"],
+            "wrist_image": curr_obs["wrist_image"],
+        }
+
+    def _extract_observation(self, obs_dict: dict) -> dict:
+        policy = obs_dict["policy"]
+        return {
+            "right_image": policy["external_cam"][0].clone().detach().cpu().numpy(),
+            "wrist_image": policy["wrist_cam"][0].clone().detach().cpu().numpy(),
+            "joint_position": policy["arm_joint_pos"].clone().detach().cpu().numpy(),
+            "gripper_position": policy["gripper_pos"].clone().detach().cpu().numpy(),
+        }
 
 def main(
         episodes:int = 1,
         headless: bool = True,
         scene: int = 1,
+        plan_file_name: str = "jing_cutamp_plan_v2.pkl",
+        plan_file_dir: str = "pkl_trajectories",
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -62,7 +186,16 @@ def main(
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
 
-    client = CutampJointPosClient(file_name="jing_cutamp_plan_v2.pkl")
+    plan_path = Path(plan_file_dir) / plan_file_name
+    try:
+        with open(plan_path, "rb") as f:
+            cutamp_plan = pickle.load(f)
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            f"Failed to load plan at {plan_path}. Re-export the plan in serialized form "
+            "using tiptop_h5_run.py so it does not depend on curobo."
+        ) from exc
+    client = LocalPlanClient(cutamp_plan)
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
