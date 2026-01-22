@@ -70,6 +70,7 @@ NVIDIA_DROID = ArticulationCfg(
                 stiffness=None,
                 damping=None,
                 velocity_limit=1.0,
+                effort_limit=50.0,
             ),
         },
     )
