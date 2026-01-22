@@ -108,21 +108,23 @@ def main(
         for ep in range(episodes):
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
-                # depth = wrist_cam.data.output["distance_to_image_plane"][0].cpu().numpy()
-                # rgb = wrist_cam.data.output["rgb"][0].cpu().numpy() 
-                # # extrinsics: T_world -> wrist_cam
-                # pos_w = wrist_cam.data.pos_w[0].cpu().numpy()
-                # quat_w_ros = wrist_cam.data.quat_w_ros[0].cpu().numpy()
-                # q_init = obs["policy"]["arm_joint_pos"].cpu().numpy()
+                depth = wrist_cam.data.output["distance_to_image_plane"][0].cpu().numpy()
+                rgb = wrist_cam.data.output["rgb"][0].cpu().numpy() 
+                # extrinsics: T_world -> wrist_cam
+                pos_w = wrist_cam.data.pos_w[0].cpu().numpy()
+                quat_w_ros = wrist_cam.data.quat_w_ros[0].cpu().numpy()
+                q_init = obs["policy"]["arm_joint_pos"].cpu().numpy()
 
-                # obs_path = os.path.expanduser("~/pi-sim-evals/tiptop_obs.h5")
-                # with h5py.File(obs_path, "w") as f:
-                #     f.create_dataset("depth", data=depth)
-                #     f.create_dataset("pos_w", data=pos_w)
-                #     f.create_dataset("quat_w_ros", data=quat_w_ros)
-                #     f.create_dataset("intrinsic_matrix", data=intrinsic_matrix)
-                #     f.create_dataset("rgb", data=rgb)
-                #     f.create_dataset("q_init", data=q_init)
+                obs_path = os.path.expanduser("~/pi-sim-evals/tiptop_assets/tiptop_obs.h5")
+                with h5py.File(obs_path, "w") as f:
+                    f.create_dataset("depth", data=depth)
+                    f.create_dataset("pos_w", data=pos_w)
+                    f.create_dataset("quat_w_ros", data=quat_w_ros)
+                    f.create_dataset("intrinsic_matrix", data=intrinsic_matrix)
+                    f.create_dataset("rgb", data=rgb)
+                    f.create_dataset("q_init", data=q_init)
+
+                break
 
                 if not headless:
                     cv2.imshow("Camera View", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))

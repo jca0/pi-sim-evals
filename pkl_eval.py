@@ -1,4 +1,5 @@
 import argparse
+import os
 import pickle
 from datetime import datetime
 from pathlib import Path
@@ -32,7 +33,8 @@ class LocalPlanClient:
         self._q_init_tol = q_init_tol
 
         for step in plan:
-            self._q_init = np.asarray(step["q_init"], dtype=np.float32)
+            if self._q_init is None and "q_init" in step:
+                self._q_init = np.asarray(step["q_init"], dtype=np.float32)
             self._plan.append(step)
 
         self._current_plan_step = 0
@@ -109,8 +111,12 @@ class LocalPlanClient:
 
             if "positions" in step:
                 full_trajectory = np.asarray(step["positions"], dtype=np.float32)
-            else:
+            elif "plan" in step:
                 full_trajectory = step["plan"].position.cpu().numpy()
+            else:
+                # Skip metadata or unsupported steps.
+                self._current_plan_step += 1
+                return self._step_plan(curr_obs)
             self._current_trajectory = self._subsample_trajectory(full_trajectory)
             self._current_waypoint_idx = 0
             self._current_plan_step += 1
@@ -158,6 +164,7 @@ def main(
         episodes:int = 1,
         headless: bool = True,
         scene: int = 1,
+        pkl_path: str = os.path.expanduser("~/pi-sim-evals/tiptop_assets/tiptop_traj.pkl"),
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -205,7 +212,7 @@ def main(
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
 
-    plan_path = Path("pkl_trajectories") / "tiptop.pkl"
+    plan_path = Path(pkl_path)
     with open(plan_path, "rb") as f:
         cutamp_plan = pickle.load(f)
     client = LocalPlanClient(cutamp_plan, gripper_action_steps=20, sim_control_hz=15.0, curobo_interp_hz=50.0)
