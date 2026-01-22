@@ -23,10 +23,17 @@ class LocalPlanClient:
         gripper_action_steps: int = 20,
         sim_control_hz: float = 15.0,
         curobo_interp_hz: float = 50.0,
+        q_init_tol: float = 0.02,
     ) -> None:
-        self._plan = plan
+        self._plan = []
+        self._q_init = None
         self._gripper_action_steps = gripper_action_steps
         self._waypoint_stride = max(1, int(round(curobo_interp_hz / sim_control_hz)))
+        self._q_init_tol = q_init_tol
+
+        for step in plan:
+            self._q_init = np.asarray(step["q_init"], dtype=np.float32)
+            self._plan.append(step)
 
         self._current_plan_step = 0
         self._current_trajectory: Optional[np.ndarray] = None
@@ -34,6 +41,7 @@ class LocalPlanClient:
         self._gripper_action_pending: Optional[str] = None
         self._gripper_action_steps_remaining = 0
         self._last_gripper_state = 0.0
+        self._q_init_reached = self._q_init is None
 
     def reset(self) -> None:
         self._current_plan_step = 0
@@ -42,6 +50,7 @@ class LocalPlanClient:
         self._gripper_action_pending = None
         self._gripper_action_steps_remaining = 0
         self._last_gripper_state = 0.0
+        self._q_init_reached = self._q_init is None
 
     def infer(self, obs: dict, instruction: str) -> dict:
         del instruction
@@ -49,6 +58,18 @@ class LocalPlanClient:
         return self._step_plan(curr_obs)
 
     def _step_plan(self, curr_obs: dict) -> dict:
+        if not self._q_init_reached:
+            q_curr = curr_obs["joint_position"].flatten()
+            if self._q_init is not None and q_curr.shape == self._q_init.shape:
+                dist = np.linalg.norm(q_curr - self._q_init)
+                if dist <= self._q_init_tol:
+                    self._q_init_reached = True
+                else:
+                    action = np.concatenate([self._q_init, np.array([self._last_gripper_state])])
+                    return self._make_result(action, curr_obs)
+            else:
+                self._q_init_reached = True
+
         if self._gripper_action_pending is not None:
             if self._gripper_action_steps_remaining > 0:
                 self._gripper_action_steps_remaining -= 1
@@ -195,7 +216,7 @@ def main(
             f"Failed to load plan at {plan_path}. Re-export the plan in serialized form "
             "using tiptop_h5_run.py so it does not depend on curobo."
         ) from exc
-    client = LocalPlanClient(cutamp_plan)
+    client = LocalPlanClient(cutamp_plan, gripper_action_steps=20, sim_control_hz=15.0, curobo_interp_hz=50.0)
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
