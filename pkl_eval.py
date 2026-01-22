@@ -158,8 +158,6 @@ def main(
         episodes:int = 1,
         headless: bool = True,
         scene: int = 1,
-        plan_file_name: str = "jing_cutamp_plan_v2.pkl",
-        plan_file_dir: str = "pkl_trajectories",
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -207,15 +205,9 @@ def main(
     obs, _ = env.reset()
     obs, _ = env.reset() # need second render cycle to get correctly loaded materials
 
-    plan_path = Path(plan_file_dir) / plan_file_name
-    try:
-        with open(plan_path, "rb") as f:
-            cutamp_plan = pickle.load(f)
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(
-            f"Failed to load plan at {plan_path}. Re-export the plan in serialized form "
-            "using tiptop_h5_run.py so it does not depend on curobo."
-        ) from exc
+    plan_path = Path("pkl_trajectories") / "tiptop.pkl"
+    with open(plan_path, "rb") as f:
+        cutamp_plan = pickle.load(f)
     client = LocalPlanClient(cutamp_plan, gripper_action_steps=20, sim_control_hz=15.0, curobo_interp_hz=50.0)
 
     video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
