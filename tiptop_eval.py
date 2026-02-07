@@ -14,7 +14,9 @@ Usage:
 
 import argparse
 import os
+import time
 from datetime import datetime
+import numpy as np
 from pathlib import Path
 from typing import Literal
 
@@ -27,6 +29,23 @@ import h5py
 from tqdm import tqdm
 
 from src.inference.tiptop_websocket import TiptopWebsocketClient
+
+
+def _add_top_padding(image, pad_px: int = 40):
+    if pad_px <= 0:
+        return image
+    h, w = image.shape[:2]
+    padded = np.zeros((h + pad_px, w, 3), dtype=image.dtype)
+    padded[pad_px:, :, :] = image
+    return padded
+
+
+def _overlay_timer_ms(image, elapsed_ms: int) -> None:
+    text = f"t={elapsed_ms} ms"
+    org = (10, 28)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(image, text, org, font, 0.8, (0, 0, 0), 3, cv2.LINE_AA)
+    cv2.putText(image, text, org, font, 0.8, (255, 255, 255), 1, cv2.LINE_AA)
 
 
 def main(
@@ -77,17 +96,18 @@ def main(
             instruction = "put the can in the mug"
         case 3:
             instruction = "put banana in the bin"
-        case 4:
-            instruction = "put the yellow mustard bottle in the bowl"
+        case 4: 
+            # instruction = "pack the cans on top of the sugar box"
+            instruction = "put the meat can on the sugar box"
         case 5:
-            instruction = "rearrange the cubes so that they spell 'REX'"
-        case 6:
             instruction = "stack the cubes"
+        case 6:
+            instruction = "put primary color cubes into the bowl"
         case _:
             raise ValueError(f"Scene {scene} not supported")
 
     env_cfg.set_scene(scene)
-    env_cfg.episode_length_s = 30.0  # LENGTH OF EPISODE
+    env_cfg.episode_length_s = 40.0  # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
 
     obs, _ = env.reset()
@@ -103,44 +123,71 @@ def main(
     video_dir.mkdir(parents=True, exist_ok=True)
     video = []
     max_steps = env.env.max_episode_length
+    video_fps = 15
 
     with torch.no_grad():
         for ep in range(episodes):
+            obs, _ = env.reset()
+            frame_idx = 0
+            log_path = video_dir / f"tiptop_scene{scene}_ep{ep}.log"
+            last_plan_counter = client.get_plan_counter()
+            plan_failed = False
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
-                depth = wrist_cam.data.output["distance_to_image_plane"][0].cpu().numpy()
-                rgb = wrist_cam.data.output["rgb"][0].cpu().numpy() 
-                # extrinsics: T_world -> wrist_cam
-                pos_w = wrist_cam.data.pos_w[0].cpu().numpy()
-                quat_w_ros = wrist_cam.data.quat_w_ros[0].cpu().numpy()
-                q_init = obs["policy"]["arm_joint_pos"].cpu().numpy()
+                # depth = wrist_cam.data.output["distance_to_image_plane"][0].cpu().numpy()
+                # rgb = wrist_cam.data.output["rgb"][0].cpu().numpy() 
+                # # extrinsics: T_world -> wrist_cam
+                # pos_w = wrist_cam.data.pos_w[0].cpu().numpy()
+                # quat_w_ros = wrist_cam.data.quat_w_ros[0].cpu().numpy()
+                # q_init = obs["policy"]["arm_joint_pos"].cpu().numpy()
 
-                obs_path = os.path.expanduser("~/pi-sim-evals/tiptop_assets/tiptop_obs.h5")
-                with h5py.File(obs_path, "w") as f:
-                    f.create_dataset("depth", data=depth)
-                    f.create_dataset("pos_w", data=pos_w)
-                    f.create_dataset("quat_w_ros", data=quat_w_ros)
-                    f.create_dataset("intrinsic_matrix", data=intrinsic_matrix)
-                    f.create_dataset("rgb", data=rgb)
-                    f.create_dataset("q_init", data=q_init)
+                # obs_path = os.path.expanduser("~/pi-sim-evals/tiptop_assets/tiptop_obs.h5")
+                # with h5py.File(obs_path, "w") as f:
+                #     f.create_dataset("depth", data=depth)
+                #     f.create_dataset("pos_w", data=pos_w)
+                #     f.create_dataset("quat_w_ros", data=quat_w_ros)
+                #     f.create_dataset("intrinsic_matrix", data=intrinsic_matrix)
+                #     f.create_dataset("rgb", data=rgb)
+                #     f.create_dataset("q_init", data=q_init)
 
-                break
-
+                viz = np.concatenate([ret["right_image"], ret["wrist_image"]], axis=1)
+                viz = _add_top_padding(viz, pad_px=40)
+                elapsed_ms = int(frame_idx * 1000 / video_fps)
+                _overlay_timer_ms(viz, elapsed_ms)
                 if not headless:
-                    cv2.imshow("Camera View", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
+                    cv2.imshow("Camera View", cv2.cvtColor(viz, cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
-                video.append(ret["viz"])
+
+                # video.append(ret["viz"])
+                video.append(viz)
+                frame_idx += 1
+                current_plan_counter = client.get_plan_counter()
+                if current_plan_counter != last_plan_counter:
+                    last_plan_counter = current_plan_counter
+                    success = client.last_plan_success
+                    time_s = client.last_plan_time_s
+                    if success is False:
+                        plan_failed = True
+                        break
+                    if success is not None and time_s is not None:
+                        with open(log_path, "w", encoding="utf-8") as log_file:
+                            log_file.write(f"Sent planning result: success={success}, time={time_s:.2f}s.\n")
+
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
-
                 if term or trunc:
                     break
+
+            if plan_failed:
+                client.reset()
+                video = []
+                continue
 
             client.reset()
             mediapy.write_video(
                 video_dir / f"tiptop_scene{scene}_ep{ep}.mp4",
                 video,
-                fps=15,
+                fps=video_fps,
             )
             video = []
             print(f"Saved video to {video_dir / f'tiptop_scene{scene}_ep{ep}.mp4'}")

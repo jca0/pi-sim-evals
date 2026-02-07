@@ -20,17 +20,36 @@ python run_eval.py --episodes 10 --headless
 
 import tyro
 import argparse
+import time
 import gymnasium as gym
 import torch
 import cv2
 import mediapy
 import h5py
+import numpy as np
 from datetime import datetime
 from pathlib import Path
 from tqdm import tqdm
 from typing import Literal
 
 from src.inference.droid_jointpos import Client as DroidJointPosClient
+
+
+def _add_top_padding(image, pad_px: int = 40):
+    if pad_px <= 0:
+        return image
+    h, w = image.shape[:2]
+    padded = np.zeros((h + pad_px, w, 3), dtype=image.dtype)
+    padded[pad_px:, :, :] = image
+    return padded
+
+
+def _overlay_timer_ms(image, elapsed_ms: int) -> None:
+    text = f"t={elapsed_ms} ms"
+    org = (10, 28)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(image, text, org, font, 0.8, (0, 0, 0), 3, cv2.LINE_AA)
+    cv2.putText(image, text, org, font, 0.8, (255, 255, 255), 1, cv2.LINE_AA)
 
 
 def main(
@@ -74,14 +93,14 @@ def main(
         case 4: 
             instruction = "put the meat can on the sugar box"
         case 5:
-            instruction = "rearrange the cubes so that they spell 'REX'"
+            instruction = "stack the cubes on top of each other"
         case 6:
-            instruction = "stack all the cubes on top of each other"
+            instruction = "put 3 cubes into the bowl"
         case _:
             raise ValueError(f"Scene {scene} not supported")
         
     env_cfg.set_scene(scene)
-    env_cfg.episode_length_s = 30.0 # LENGTH OF EPISODE
+    env_cfg.episode_length_s = 60.0 # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
     wrist_camera = env.env.scene["wrist_cam"]
     # intrinsics = wrist_camera.data.intrinsic_matrices[0].cpu().numpy()
@@ -105,26 +124,34 @@ def main(
     wrist_video = []
     ep = 0
     max_steps = env.env.max_episode_length
+    video_fps = 15
     with torch.no_grad():
         for ep in range(episodes):
             obs, _ = env.reset()
             task_completed = False
+            frame_idx = 0
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
+                viz = np.concatenate([ret["right_image"], ret["wrist_image"]], axis=1)
+                viz = _add_top_padding(viz, pad_px=40)
+                elapsed_ms = int(frame_idx * 1000 / video_fps)
+                _overlay_timer_ms(viz, elapsed_ms)
                 if not headless:
-                    cv2.imshow("Right Camera", cv2.cvtColor(ret["viz"], cv2.COLOR_RGB2BGR))
+                    cv2.imshow("Right Camera", cv2.cvtColor(viz, cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
-                video.append(ret["viz"])
-                right_video.append(ret["right_image"])
-                wrist_video.append(ret["wrist_image"])
+                # video.append(ret["viz"])
+                video.append(viz)
+                frame_idx += 1
+                # right_video.append(ret["right_image"])
+                # wrist_video.append(ret["wrist_image"])
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
 
-                if i % 30 == 0 and not task_completed:
-                    task_completed = task_checker.check(env.env, obs)
-                    if task_completed:
-                        print("TASK COMPLETED")
-                        term = True
+                # if i % 30 == 0 and not task_completed:
+                #     task_completed = task_checker.check(env.env, obs)
+                #     if task_completed:
+                #         print("TASK COMPLETED")
+                #         term = True
 
                 if term or trunc:
                     break
@@ -133,7 +160,7 @@ def main(
             mediapy.write_video(
                 video_dir / f"{policy}_scene{scene}_ep{ep}.mp4",
                 video,
-                fps=15,
+                fps=video_fps,
             )
             # # added right and wrist videos
             # mediapy.write_video(
