@@ -107,7 +107,7 @@ def main(
             raise ValueError(f"Scene {scene} not supported")
 
     env_cfg.set_scene(scene)
-    env_cfg.episode_length_s = 40.0  # LENGTH OF EPISODE
+    env_cfg.episode_length_s = 15.0  # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
 
     obs, _ = env.reset()
@@ -129,9 +129,6 @@ def main(
         for ep in range(episodes):
             obs, _ = env.reset()
             frame_idx = 0
-            log_path = video_dir / f"tiptop_scene{scene}_ep{ep}.log"
-            last_plan_counter = client.get_plan_counter()
-            plan_failed = False
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
                 # depth = wrist_cam.data.output["distance_to_image_plane"][0].cpu().numpy()
@@ -161,27 +158,11 @@ def main(
                 # video.append(ret["viz"])
                 video.append(viz)
                 frame_idx += 1
-                current_plan_counter = client.get_plan_counter()
-                if current_plan_counter != last_plan_counter:
-                    last_plan_counter = current_plan_counter
-                    success = client.last_plan_success
-                    time_s = client.last_plan_time_s
-                    if success is False:
-                        plan_failed = True
-                        break
-                    if success is not None and time_s is not None:
-                        with open(log_path, "w", encoding="utf-8") as log_file:
-                            log_file.write(f"Sent planning result: success={success}, time={time_s:.2f}s.\n")
 
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
                 if term or trunc:
                     break
-
-            if plan_failed:
-                client.reset()
-                video = []
-                continue
 
             client.reset()
             mediapy.write_video(
