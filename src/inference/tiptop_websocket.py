@@ -127,10 +127,6 @@ class TiptopWebsocketClient(InferenceClient):
         )
         return response.text or ""
 
-    @property
-    def action_chunk_done(self) -> bool:
-        return self._action_chunk_done
-
     def _encode_png(self, image: np.ndarray) -> bytes:
         if image.dtype != np.uint8:
             img = image
