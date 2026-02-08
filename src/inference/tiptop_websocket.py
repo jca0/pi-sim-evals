@@ -2,12 +2,18 @@
 
 import logging
 import time
+import os
+from io import BytesIO
 from typing import Optional
 
 import msgpack_numpy
 import numpy as np
 import websockets.sync.client
 from scipy.spatial.transform import Rotation
+from PIL import Image
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
 
 from .abstract_client import InferenceClient
 
@@ -31,6 +37,8 @@ class TiptopWebsocketClient(InferenceClient):
         sim_control_hz: float = 15.0,
         curobo_interp_hz: float = 50.0,
     ) -> None:
+        load_dotenv()
+
         self._uri = f"ws://{host}:{port}"
         self._gripper_action_steps = gripper_action_steps
         
@@ -50,6 +58,7 @@ class TiptopWebsocketClient(InferenceClient):
         self._gripper_action_pending: Optional[str] = None
         self._gripper_action_steps_remaining: int = 0
         self._last_gripper_state: float = 0.0
+        self._action_chunk_done: bool = False
 
         self._connect()
 
@@ -76,6 +85,7 @@ class TiptopWebsocketClient(InferenceClient):
         self._gripper_action_pending = None
         self._gripper_action_steps_remaining = 0
         self._last_gripper_state = 0.0
+        self._action_chunk_done = False
 
     def infer(self, obs: dict, instruction: str) -> dict:
         curr_obs = self._extract_observation(obs)
@@ -83,7 +93,54 @@ class TiptopWebsocketClient(InferenceClient):
         if self._plan is None:
             self._query_server(obs, curr_obs, instruction)
 
-        return self._step_plan(curr_obs)
+        result = self._step_plan(curr_obs)
+        if self._action_chunk_done:
+            result["vlm_response"] = self.call_vlm(obs, instruction)
+            print(f"VLM response: {result['vlm_response']}")
+        else:
+            result["vlm_response"] = ""
+        return result
+
+    def call_vlm(self, obs: dict, instruction: str) -> str:
+        api_key = os.getenv("GOOGLE_API_KEY")
+        client = genai.Client(api_key=api_key) if api_key else genai.Client()
+
+        right_image = obs["policy"]["external_cam"][0].clone().detach().cpu().numpy()
+        wrist_image = obs["policy"]["wrist_cam"][0].clone().detach().cpu().numpy()
+
+        right_bytes = self._encode_png(right_image)
+        wrist_bytes = self._encode_png(wrist_image)
+
+        prompt = (
+            "Given two images (external view, wrist view) "
+            f"and the task instruction, determine if the task is complete. "
+            "Return only one word: true if the task is complete, false otherwise. \n\nTask: {instruction}"
+        )
+
+        response = client.models.generate_content(
+            model="gemini-robotics-er-1.5-preview",
+            contents=[
+                types.Part.from_bytes(data=right_bytes, mime_type="image/png"),
+                types.Part.from_bytes(data=wrist_bytes, mime_type="image/png"),
+                prompt,
+            ],
+        )
+        return response.text or ""
+
+    @property
+    def action_chunk_done(self) -> bool:
+        return self._action_chunk_done
+
+    def _encode_png(self, image: np.ndarray) -> bytes:
+        if image.dtype != np.uint8:
+            img = image
+            if np.issubdtype(img.dtype, np.floating) and img.max() <= 1.0:
+                img = img * 255.0
+            image = np.clip(img, 0, 255).astype(np.uint8)
+        pil_img = Image.fromarray(image)
+        buf = BytesIO()
+        pil_img.save(buf, format="PNG")
+        return buf.getvalue()
 
     def _query_server(self, raw_obs: dict, curr_obs: dict, instruction: str) -> None:
         _log.info(f"Querying tiptop server for task: '{instruction}'")
@@ -194,6 +251,7 @@ class TiptopWebsocketClient(InferenceClient):
         return trajectory[indices]
 
     def _step_plan(self, curr_obs: dict) -> dict:
+        self._action_chunk_done = False
         # Handle pending gripper action
         if self._gripper_action_pending is not None:
             if self._gripper_action_steps_remaining > 0:
@@ -207,6 +265,7 @@ class TiptopWebsocketClient(InferenceClient):
                 self._last_gripper_state = 1.0 if self._gripper_action_pending == "close" else 0.0
                 self._gripper_action_pending = None
                 self._current_plan_step += 1
+                self._action_chunk_done = True
 
         # Load next trajectory if needed
         if self._current_trajectory is None or self._current_waypoint_idx >= len(self._current_trajectory):
@@ -240,6 +299,8 @@ class TiptopWebsocketClient(InferenceClient):
         # Return next waypoint
         waypoint = self._current_trajectory[self._current_waypoint_idx]
         self._current_waypoint_idx += 1
+        if self._current_waypoint_idx >= len(self._current_trajectory):
+            self._action_chunk_done = True
 
         if waypoint.shape[0] == 7:
             action = np.concatenate([waypoint, np.array([self._last_gripper_state])])
@@ -258,6 +319,7 @@ class TiptopWebsocketClient(InferenceClient):
 
         return {
             "action": action,
+            "action_chunk_done": self._action_chunk_done,
             "viz": viz,
             "right_image": curr_obs["right_image"],
             "wrist_image": curr_obs["wrist_image"],
