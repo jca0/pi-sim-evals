@@ -94,11 +94,11 @@ class TiptopWebsocketClient(InferenceClient):
             self._query_server(obs, curr_obs, instruction)
 
         result = self._step_plan(curr_obs)
-        if self._action_chunk_done:
-            result["vlm_response"] = self.call_vlm(obs, instruction)
-            print(f"VLM response: {result['vlm_response']}")
-        else:
-            result["vlm_response"] = ""
+        # if self._action_chunk_done:
+        #     result["vlm_response"] = self.call_vlm(obs, instruction)
+        #     print(f"VLM response: {result['vlm_response']}")
+        # else:
+        #     result["vlm_response"] = ""
         return result
 
     def call_vlm(self, obs: dict, instruction: str) -> str:
@@ -113,8 +113,9 @@ class TiptopWebsocketClient(InferenceClient):
 
         prompt = (
             "Given two images (external view, wrist view) "
-            f"and the task instruction, determine if the task is complete. "
-            "Return only one word: true if the task is complete, false otherwise. \n\nTask: {instruction}"
+            "and the task instruction, determine if the task is complete. "
+            "Return only one word: true if the task is complete, false otherwise. Add a short one sentence explanation for your answer."
+            "\n\nTask: {instruction}"
         )
 
         response = client.models.generate_content(
