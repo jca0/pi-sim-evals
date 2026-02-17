@@ -10,25 +10,26 @@ Usage:
 
     # Then run this evaluation:
     uv run python tiptop_ws_eval.py --scene 1 --ws-host localhost --ws-port 8765
+
+    # To record data in raw DROID format for finetuning:
+    uv run python tiptop_eval.py --scene 1 --record --record-dir ~/openpi/datasets/sim
 """
 
 import argparse
 import os
-import time
 from datetime import datetime
 import numpy as np
 from pathlib import Path
-from typing import Literal
 
 import cv2
 import gymnasium as gym
 import mediapy
 import torch
 import tyro
-import h5py
 from tqdm import tqdm
 
 from src.inference.tiptop_websocket import TiptopWebsocketClient
+from src.recording import save_episode_droid_format, update_annotations
 
 
 def _add_top_padding(image, pad_px: int = 40):
@@ -54,6 +55,8 @@ def main(
     scene: int = 1,
     ws_host: str = "localhost",
     ws_port: int = 8765,
+    record: bool = False,
+    record_dir: str = os.path.expanduser("~/pi-sim-evals/recordings"),
 ):
     """Run evaluation using tiptop websocket server.
 
@@ -63,6 +66,8 @@ def main(
         scene: Scene number (1-6)
         ws_host: Tiptop websocket server host
         ws_port: Tiptop websocket server port
+        record: If True, save episode data in raw DROID format for finetuning
+        record_dir: Directory to save recorded episodes (same structure as ~/openpi/datasets)
     """
     # Launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -96,24 +101,22 @@ def main(
             instruction = "put the can in the mug"
         case 3:
             instruction = "put banana in the bin"
-        case 4: 
+        case 4:
             # instruction = "pack the cans on top of the sugar box"
             instruction = "put the meat can on the sugar box"
         case 5:
             instruction = "stack the cubes"
         case 6:
-            instruction = "put primary color cubes into the bowl"
+            instruction = "put three cubes into the bowl"
         case _:
             raise ValueError(f"Scene {scene} not supported")
 
     env_cfg.set_scene(scene)
-    env_cfg.episode_length_s = 15.0  # LENGTH OF EPISODE
+    env_cfg.episode_length_s = 45.0  # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
 
     obs, _ = env.reset()
     obs, _ = env.reset()  # Need second render cycle to get correctly loaded materials
-    wrist_cam = env.env.scene["wrist_cam"]
-    intrinsic_matrix = wrist_cam.data.intrinsic_matrices[0].cpu().numpy()
 
     # Connect to tiptop websocket server
     print(f"Connecting to tiptop server at ws://{ws_host}:{ws_port}...")
@@ -125,27 +128,50 @@ def main(
     max_steps = env.env.max_episode_length
     video_fps = 15
 
+    record_base = Path(record_dir)
+    if record:
+        record_base.mkdir(parents=True, exist_ok=True)
+
     with torch.no_grad():
         for ep in range(episodes):
             obs, _ = env.reset()
             frame_idx = 0
-            for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
-                ret = client.infer(obs, instruction)
-                # depth = wrist_cam.data.output["distance_to_image_plane"][0].cpu().numpy()
-                # rgb = wrist_cam.data.output["rgb"][0].cpu().numpy() 
-                # # extrinsics: T_world -> wrist_cam
-                # pos_w = wrist_cam.data.pos_w[0].cpu().numpy()
-                # quat_w_ros = wrist_cam.data.quat_w_ros[0].cpu().numpy()
-                # q_init = obs["policy"]["arm_joint_pos"].cpu().numpy()
 
-                # obs_path = os.path.expanduser("~/pi-sim-evals/tiptop_assets/tiptop_obs.h5")
-                # with h5py.File(obs_path, "w") as f:
-                #     f.create_dataset("depth", data=depth)
-                #     f.create_dataset("pos_w", data=pos_w)
-                #     f.create_dataset("quat_w_ros", data=quat_w_ros)
-                #     f.create_dataset("intrinsic_matrix", data=intrinsic_matrix)
-                #     f.create_dataset("rgb", data=rgb)
-                #     f.create_dataset("q_init", data=q_init)
+            # Per-episode recording buffers
+            ep_ext_images = []
+            ep_wrist_images = []
+            ep_joint_positions = []
+            ep_gripper_positions = []
+            ep_actions = []
+
+            for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
+                # Record observation BEFORE taking the action
+                if record:
+                    ep_ext_images.append(
+                        obs["policy"]["external_cam"][0].cpu().numpy().astype(np.uint8)
+                    )
+                    ep_wrist_images.append(
+                        obs["policy"]["wrist_cam"][0].cpu().numpy().astype(np.uint8)
+                    )
+                    # arm_joint_pos obs function already selects env 0 internally,
+                    # so shape is (7,) not (1, 7) — don't index [0] again.
+                    ep_joint_positions.append(
+                        obs["policy"]["arm_joint_pos"].cpu().numpy().astype(np.float64)
+                    )
+                    ep_gripper_positions.append(
+                        float(obs["policy"]["gripper_pos"].cpu().numpy())
+                    )
+
+                ret = client.infer(obs, instruction)
+
+                # If tiptop failed to find a plan, skip rest of episode
+                if client._plan is not None and len(client._plan) == 0:
+                    print(f"Plan failed, skipping episode {ep+1}")
+                    break
+
+                # Record the action that will be executed
+                if record:
+                    ep_actions.append(np.array(ret["action"], dtype=np.float64))
 
                 viz = np.concatenate([ret["right_image"], ret["wrist_image"]], axis=1)
                 viz = _add_top_padding(viz, pad_px=40)
@@ -155,7 +181,6 @@ def main(
                     cv2.imshow("Camera View", cv2.cvtColor(viz, cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
 
-                # video.append(ret["viz"])
                 video.append(viz)
                 frame_idx += 1
 
@@ -165,6 +190,8 @@ def main(
                     break
 
             client.reset()
+
+            # Save visualization video
             mediapy.write_video(
                 video_dir / f"tiptop_scene{scene}_ep{ep}.mp4",
                 video,
@@ -172,6 +199,31 @@ def main(
             )
             video = []
             print(f"Saved video to {video_dir / f'tiptop_scene{scene}_ep{ep}.mp4'}")
+
+            # Save episode in raw DROID format
+            if record and len(ep_actions) > 0:
+                ts = datetime.now()
+                # UUID must not contain underscores — the conversion script
+                # extracts it from "metadata_<uuid>.json" by splitting on "_".
+                ep_uuid = f"SIM+sim+{ts.strftime('%Y-%m-%d-%Hh-%Mm-%Ss')}"
+                episode_dir = record_base / ts.strftime("%Y-%m-%d_%H-%M-%S")
+
+                save_episode_droid_format(
+                    episode_dir=episode_dir,
+                    episode_uuid=ep_uuid,
+                    instruction=instruction,
+                    ext_images=ep_ext_images,
+                    wrist_images=ep_wrist_images,
+                    joint_positions=ep_joint_positions,
+                    gripper_positions=ep_gripper_positions,
+                    actions=ep_actions,
+                    fps=video_fps,
+                )
+                update_annotations(
+                    record_base / "aggregated-annotations-030724.json",
+                    ep_uuid,
+                    instruction,
+                )
 
     client.close()
     env.close()
