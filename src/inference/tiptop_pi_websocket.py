@@ -67,6 +67,7 @@ class TiptopPiWebsocketClient(InferenceClient):
         self._gripper_action_steps_remaining: int = 0
         self._last_gripper_state: float = 0.0
         self._action_chunk_done: bool = False
+        self._current_label: str = ""
 
         # Pi0.5 fallback
         self._pi05_host = pi05_host
@@ -99,6 +100,7 @@ class TiptopPiWebsocketClient(InferenceClient):
         self._gripper_action_steps_remaining = 0
         self._last_gripper_state = 0.0
         self._action_chunk_done = False
+        self._current_label = ""
 
         if self._fallback_client is not None:
             self._fallback_client.reset()
@@ -115,19 +117,33 @@ class TiptopPiWebsocketClient(InferenceClient):
             self._query_server(obs, curr_obs, instruction)
 
         result = self._step_plan(curr_obs)
+        result["current_label"] = self._current_label
 
-        if self._action_chunk_done and self._plan_exhausted():
-            vlm_response = self.call_vlm(obs, instruction)
-            result["vlm_response"] = vlm_response
-            _log.info(f"VLM response: {vlm_response}")
+        if self._action_chunk_done:
+            label = self._current_label
+            # Extract the operator name (e.g., "Pick" from "Pick(cube, grasp1, q1)")
+            op_name = label.split("(")[0] if label else ""
 
-            if "false" in vlm_response.lower():
-                _log.info("VLM says task incomplete — switching to pi0.5 fallback")
-                self._fallback_client = Pi05Client(
-                    remote_host=self._pi05_host,
-                    remote_port=self._pi05_port,
-                    policy="pi0.5",
-                )
+            if self._plan_exhausted():
+                # Full plan done — check overall task completion
+                vlm_response = self.call_vlm(obs, instruction, label)
+                result["vlm_response"] = vlm_response
+                _log.info(f"Plan exhausted. VLM check for '{label}': {vlm_response}")
+
+                if "false" in vlm_response.lower():
+                    _log.info("VLM says task incomplete — switching to pi0.5 fallback")
+                    self._fallback_client = Pi05Client(
+                        remote_host=self._pi05_host,
+                        remote_port=self._pi05_port,
+                        policy="pi0.5",
+                    )
+            elif op_name in ("Pick", "Place"):
+                # Check predicate after critical steps
+                vlm_response = self.call_vlm(obs, instruction, label)
+                result["vlm_response"] = vlm_response
+                _log.info(f"VLM check after '{label}': {vlm_response}")
+            else:
+                result["vlm_response"] = ""
         else:
             result["vlm_response"] = ""
 
@@ -142,7 +158,7 @@ class TiptopPiWebsocketClient(InferenceClient):
             return self._gripper_action_pending is None
         return False
 
-    def call_vlm(self, obs: dict, instruction: str) -> str:
+    def call_vlm(self, obs: dict, instruction: str, label: str = "") -> str:
         api_key = os.getenv("GOOGLE_API_KEY")
         client = genai.Client(api_key=api_key) if api_key else genai.Client()
 
@@ -153,10 +169,12 @@ class TiptopPiWebsocketClient(InferenceClient):
         wrist_bytes = self._encode_png(wrist_image)
 
         prompt = (
-            "Given two images (external view, wrist view) "
-            "and the task instruction, determine if the task is complete. "
-            "Return only one word: true if the task is complete, false otherwise. Add a short one sentence explanation for your answer."
-            f"\n\nTask: {instruction}"
+            "Given two images (external view, wrist view), the overall task instruction, "
+            "and the specific action that was just attempted, determine if that action succeeded. "
+            "Return only one word: true if the action succeeded, false otherwise. "
+            "Add a short one sentence explanation for your answer."
+            f"\n\nOverall task: {instruction}"
+            f"\nAction just attempted: {label}"
         )
 
         response = client.models.generate_content(
@@ -197,14 +215,15 @@ class TiptopPiWebsocketClient(InferenceClient):
             self._plan = response["plan"]
             _log.info(f"Received plan with {len(self._plan)} steps in {elapsed:.1f}s")
             for i, step in enumerate(self._plan):
+                label = step.get("label", "")
                 if step["type"] == "trajectory":
                     orig_len = len(step["positions"])
                     subsampled_len = len(self._subsample_trajectory(step["positions"]))
                     _log.info(
-                        f"  Step {i}: trajectory ({orig_len} -> {subsampled_len} waypoints after subsampling)"
+                        f"  Step {i}: trajectory ({orig_len} -> {subsampled_len} waypoints) [{label}]"
                     )
                 else:
-                    _log.info(f"  Step {i}: gripper {step['action']}")
+                    _log.info(f"  Step {i}: gripper {step['action']} [{label}]")
         else:
             _log.error(f"Tiptop server returned error: {response.get('error', 'unknown')}")
             self._plan = []
@@ -315,6 +334,7 @@ class TiptopPiWebsocketClient(InferenceClient):
                 return self._make_result(action, curr_obs)
 
             step = self._plan[self._current_plan_step]
+            self._current_label = step.get("label", "")
 
             if step["type"] == "gripper":
                 self._gripper_action_pending = step["action"]
