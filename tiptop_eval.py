@@ -192,13 +192,14 @@ def main(
             client.reset()
 
             # Save visualization video
-            mediapy.write_video(
-                video_dir / f"tiptop_scene{scene}_ep{ep}.mp4",
-                video,
-                fps=video_fps,
-            )
+            if video:
+                mediapy.write_video(
+                    video_dir / f"tiptop_scene{scene}_ep{ep}.mp4",
+                    video,
+                    fps=video_fps,
+                )
+                print(f"Saved video to {video_dir / f'tiptop_scene{scene}_ep{ep}.mp4'}")
             video = []
-            print(f"Saved video to {video_dir / f'tiptop_scene{scene}_ep{ep}.mp4'}")
 
             # Save episode in raw DROID format
             if record and len(ep_actions) > 0:
