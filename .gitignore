@@ -5,7 +5,7 @@ assets/
 test_imgs/
 assets.zip
 output/
-
+recordings/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

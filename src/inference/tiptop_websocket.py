@@ -94,38 +94,7 @@ class TiptopWebsocketClient(InferenceClient):
             self._query_server(obs, curr_obs, instruction)
 
         result = self._step_plan(curr_obs)
-        if self._action_chunk_done:
-            result["vlm_response"] = self.call_vlm(obs, instruction)
-            print(f"VLM response: {result['vlm_response']}")
-        else:
-            result["vlm_response"] = ""
         return result
-
-    def call_vlm(self, obs: dict, instruction: str) -> str:
-        api_key = os.getenv("GOOGLE_API_KEY")
-        client = genai.Client(api_key=api_key) if api_key else genai.Client()
-
-        right_image = obs["policy"]["external_cam"][0].clone().detach().cpu().numpy()
-        wrist_image = obs["policy"]["wrist_cam"][0].clone().detach().cpu().numpy()
-
-        right_bytes = self._encode_png(right_image)
-        wrist_bytes = self._encode_png(wrist_image)
-
-        prompt = (
-            "Given two images (external view, wrist view) "
-            f"and the task instruction, determine if the task is complete. "
-            "Return only one word: true if the task is complete, false otherwise. \n\nTask: {instruction}"
-        )
-
-        response = client.models.generate_content(
-            model="gemini-robotics-er-1.5-preview",
-            contents=[
-                types.Part.from_bytes(data=right_bytes, mime_type="image/png"),
-                types.Part.from_bytes(data=wrist_bytes, mime_type="image/png"),
-                prompt,
-            ],
-        )
-        return response.text or ""
 
     def _encode_png(self, image: np.ndarray) -> bytes:
         if image.dtype != np.uint8:
