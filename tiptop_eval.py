@@ -52,6 +52,7 @@ def main(
     episodes: int = 1,
     headless: bool = True,
     scene: int = 1,
+    scene_variant: str = "",
     ws_host: str = "localhost",
     ws_port: int = 8765,
 ):
@@ -106,7 +107,7 @@ def main(
         case _:
             raise ValueError(f"Scene {scene} not supported")
 
-    env_cfg.set_scene(scene)
+    env_cfg.set_scene(f"{scene}{scene_variant}")
     env_cfg.episode_length_s = 15.0  # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
 
