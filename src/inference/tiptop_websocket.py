@@ -94,11 +94,19 @@ class TiptopWebsocketClient(InferenceClient):
             self._query_server(obs, curr_obs, instruction)
 
         result = self._step_plan(curr_obs)
-        # if self._action_chunk_done:
-        #     result["vlm_response"] = self.call_vlm(obs, instruction)
-        #     print(f"VLM response: {result['vlm_response']}")
-        # else:
-        #     result["vlm_response"] = ""
+        if self._action_chunk_done:
+            completed_step = self._plan[self._current_plan_step - 1] if self._plan and self._current_plan_step > 0 else None
+            if completed_step is not None:
+                label = completed_step.get("label", "")
+                if completed_step["type"] == "gripper":
+                    step_desc = f"gripper {completed_step['action']}"
+                else:
+                    step_desc = f"trajectory ({len(completed_step['positions'])} waypoints)"
+                print(f"Completed action chunk: step {self._current_plan_step - 1} - {step_desc} | label: {label}")
+            result["vlm_response"] = self.call_vlm(obs, instruction)
+            print(f"VLM response: {result['vlm_response']}")
+        else:
+            result["vlm_response"] = ""
         return result
 
     def call_vlm(self, obs: dict, instruction: str) -> str:
@@ -115,7 +123,7 @@ class TiptopWebsocketClient(InferenceClient):
             "Given two images (external view, wrist view) "
             "and the task instruction, determine if the task is complete. "
             "Return only one word: true if the task is complete, false otherwise. Add a short one sentence explanation for your answer."
-            "\n\nTask: {instruction}"
+            f"\n\nTask: {instruction}"
         )
 
         response = client.models.generate_content(
