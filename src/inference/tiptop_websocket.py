@@ -63,6 +63,7 @@ class TiptopWebsocketClient(InferenceClient):
         self._gripper_action_steps_remaining: int = 0
         self._last_gripper_state: float = 0.0
         self._action_chunk_done: bool = False
+        self._last_planning_time: Optional[float] = None  # seconds, from server response
 
         self._connect()
 
@@ -81,6 +82,11 @@ class TiptopWebsocketClient(InferenceClient):
                 _log.info("Waiting for tiptop server...")
                 time.sleep(5)
 
+    @property
+    def last_planning_time(self) -> float | None:
+        """Planning time in seconds from the last server query, or None if no query yet."""
+        return self._last_planning_time
+
     def reset(self) -> None:
         self._plan = None
         self._current_plan_step = 0
@@ -90,6 +96,7 @@ class TiptopWebsocketClient(InferenceClient):
         self._gripper_action_steps_remaining = 0
         self._last_gripper_state = 0.0
         self._action_chunk_done = False
+        self._last_planning_time = None
         # Reconnect to get a fresh server-side handler (avoids stale cuTAMP state)
         if self._ws is not None:
             self._ws.close()
@@ -127,6 +134,10 @@ class TiptopWebsocketClient(InferenceClient):
         start_time = time.time()
         response = msgpack_numpy.unpackb(self._ws.recv())
         elapsed = time.time() - start_time
+
+        # Store planning time from server (infer_ms) or fall back to client-measured elapsed
+        server_timing = response.get("server_timing", {})
+        self._last_planning_time = server_timing.get("infer_ms", elapsed * 1000) / 1000.0
 
         if response["success"]:
             self._plan = response["plan"]
