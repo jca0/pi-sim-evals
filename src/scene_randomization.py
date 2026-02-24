@@ -58,13 +58,23 @@ SCENE_CONFIG = {
 }
 
 
-def sample_positions(rng, num_objects, table_x, table_y, min_dist, max_attempts=1000):
-    """Sample non-overlapping (x, y) positions on the table."""
+def sample_positions(rng, num_objects, table_x, table_y, min_dist,
+                     per_object_bounds=None, max_attempts=1000):
+    """Sample non-overlapping (x, y) positions on the table.
+
+    Args:
+        per_object_bounds: Optional list of (table_x, table_y) tuples per object.
+            If provided, each object uses its own bounds. None entries use the defaults.
+    """
     for _ in range(max_attempts):
         positions = []
-        for _ in range(num_objects):
-            x = rng.uniform(table_x[0], table_x[1])
-            y = rng.uniform(table_y[0], table_y[1])
+        for i in range(num_objects):
+            if per_object_bounds and per_object_bounds[i] is not None:
+                bx, by = per_object_bounds[i]
+            else:
+                bx, by = table_x, table_y
+            x = rng.uniform(bx[0], bx[1])
+            y = rng.uniform(by[0], by[1])
             positions.append((x, y))
         # Check all pairwise distances
         ok = True
@@ -82,9 +92,26 @@ def sample_positions(rng, num_objects, table_x, table_y, min_dist, max_attempts=
     raise RuntimeError(f"Could not find valid positions after {max_attempts} attempts")
 
 
-def randomize_objects(env, object_names, rng, table_x, table_y, min_dist):
-    """Randomize object (x, y) positions on the table, keeping original z and orientation."""
+def randomize_objects(env, object_names, rng, table_x, table_y, min_dist,
+                      object_bounds=None, **kwargs):
+    """Randomize object (x, y) positions on the table, keeping original z and orientation.
+
+    Args:
+        object_bounds: Optional dict mapping object name to {"table_x": ..., "table_y": ...}
+            for per-object placement bounds (e.g. to keep task objects in the wrist camera).
+    """
     env_origins = env.env.scene.env_origins
+
+    # Build per-object bounds list
+    per_object_bounds = None
+    if object_bounds:
+        per_object_bounds = []
+        for name in object_names:
+            if name in object_bounds:
+                b = object_bounds[name]
+                per_object_bounds.append((b["table_x"], b["table_y"]))
+            else:
+                per_object_bounds.append(None)
 
     # Read original z heights and orientations
     obj_handles = []
@@ -95,7 +122,8 @@ def randomize_objects(env, object_names, rng, table_x, table_y, min_dist):
         obj_handles.append((obj, orig_pos[2], orig_quat))
 
     # Sample new (x, y) positions
-    positions = sample_positions(rng, len(object_names), table_x, table_y, min_dist)
+    positions = sample_positions(rng, len(object_names), table_x, table_y, min_dist,
+                                 per_object_bounds=per_object_bounds)
 
     # Write new positions
     origin = env_origins[0].cpu().numpy()

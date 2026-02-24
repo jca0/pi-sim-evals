@@ -85,9 +85,14 @@ class SceneCfg(InteractiveSceneCfg):
         scene_prim = stage.GetPrimAtPath("/World")
         children = scene_prim.GetChildren()
 
+        _NON_RIGID_PRIMS = {"DomeLight", "Environment", "table", "sphere_light"}
+
         for child in children:
-            # if rigid body
-            if not UsdPhysics.RigidBodyAPI(child):
+            if child.GetName() in _NON_RIGID_PRIMS:
+                continue
+            # Register prims with RigidBodyAPI directly, or payloaded prims
+            # whose referenced asset defines a rigid body internally
+            if not UsdPhysics.RigidBodyAPI(child) and not child.HasPayload():
                 continue
 
             name = child.GetName()

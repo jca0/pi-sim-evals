@@ -145,6 +145,7 @@ def main(
                 positions = randomize_objects(
                     env, rand_cfg["objects"], rng,
                     rand_cfg["table_x"], rand_cfg["table_y"], rand_cfg["min_dist"],
+                    object_bounds=rand_cfg.get("object_bounds"),
                 )
                 if ep in skip:
                     print(f"  Skipping episode {ep}")

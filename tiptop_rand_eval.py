@@ -123,6 +123,7 @@ def main(
             positions = randomize_objects(
                 env, cfg["objects"], rng,
                 cfg["table_x"], cfg["table_y"], cfg["min_dist"],
+                object_bounds=cfg.get("object_bounds"),
             )
             if ep in skip:
                 print(f"  Skipping episode {ep}")
