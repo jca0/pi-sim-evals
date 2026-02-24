@@ -33,6 +33,7 @@ from tqdm import tqdm
 from typing import Literal
 
 from src.inference.droid_jointpos import Client as DroidJointPosClient
+from src.scene_randomization import SCENE_CONFIG, randomize_objects
 
 
 def _add_top_padding(image, pad_px: int = 40):
@@ -56,7 +57,9 @@ def main(
         episodes:int = 10,
         headless: bool = True,
         scene: int = 1,
-        policy: Literal["pi0.5", "pi0"] = "pi0.5",
+        scene_variant: str = "",
+        policy: Literal["pi0.5", "pi0"] = "pi0.5",  
+        seed: int = 42,
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -93,14 +96,14 @@ def main(
         case 4: 
             instruction = "put the meat can on the sugar box"
         case 5:
-            instruction = "put three cubes into the bowl"
-        case 6:
             instruction = "stack the cubes on top of each other"
+        case 6:
+            instruction = "put 3 cubes into the bowl"
         case _:
             raise ValueError(f"Scene {scene} not supported")
         
-    env_cfg.set_scene(scene)
-    env_cfg.episode_length_s = 60.0 # LENGTH OF EPISODE
+    env_cfg.set_scene(f"{scene}{scene_variant}")
+    env_cfg.episode_length_s = 15.0 # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
     wrist_camera = env.env.scene["wrist_cam"]
     # intrinsics = wrist_camera.data.intrinsic_matrices[0].cpu().numpy()
@@ -111,7 +114,10 @@ def main(
 
 
     # Create output directory
-    video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
+    if seed is not None:
+        video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / f"{policy}_scene{scene}_rand"
+    else:
+        video_dir = Path("runs") / datetime.now().strftime("%Y-%m-%d") / datetime.now().strftime("%H-%M-%S")
     video_dir.mkdir(parents=True, exist_ok=True)
 
     
@@ -125,20 +131,36 @@ def main(
     ep = 0
     max_steps = env.env.max_episode_length
     video_fps = 15
+    rng = np.random.default_rng(seed=seed) if seed is not None else None
+    rand_cfg = SCENE_CONFIG.get(scene)
     with torch.no_grad():
         for ep in range(episodes):
             obs, _ = env.reset()
             task_completed = False
             frame_idx = 0
+
+            # Randomize object positions if seed is provided
+            if rng is not None and rand_cfg is not None:
+                positions = randomize_objects(
+                    env, rand_cfg["objects"], rng,
+                    rand_cfg["table_x"], rand_cfg["table_y"], rand_cfg["min_dist"],
+                )
+                for name, (x, y) in zip(rand_cfg["objects"], positions):
+                    print(f"  {name}: ({x:.3f}, {y:.3f})")
+
             # Settle phase: run sim for ~1 second so objects settle into place
-            settle_steps = 15  # 15 steps at 15 Hz = 1 second
+            orig_episode_length_s = env.env.cfg.episode_length_s
+            env.env.cfg.episode_length_s = orig_episode_length_s + 1.0
+            settle_steps = 15
             for _ in range(settle_steps):
                 hold_action = torch.cat([
                     obs["policy"]["arm_joint_pos"],
                     obs["policy"]["gripper_pos"],
                 ], dim=-1).unsqueeze(0)
                 obs, _, _, _, _ = env.step(hold_action)
-            env.env.episode_length_buf[:] = 0  # don't count settle steps toward episode length
+            env.env.cfg.episode_length_s = orig_episode_length_s
+            env.env.episode_length_buf[:] = 0
+
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
                 viz = np.concatenate([ret["right_image"], ret["wrist_image"]], axis=1)
@@ -166,8 +188,9 @@ def main(
                     break
 
             client.reset()
+            video_name = f"{policy}_scene{scene}_rand{ep}.mp4"
             mediapy.write_video(
-                video_dir / f"{policy}_scene{scene}_ep{ep}.mp4",
+                video_dir / video_name,
                 video,
                 fps=video_fps,
             )
