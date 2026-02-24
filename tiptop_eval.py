@@ -101,9 +101,9 @@ def main(
             # instruction = "pack the cans on top of the sugar box"
             instruction = "put the meat can on the sugar box"
         case 5:
-            instruction = "stack the cubes"
+            instruction = "put three cubes into the bowl"
         case 6:
-            instruction = "put primary color cubes into the bowl"
+            instruction = "stack the cubes"
         case _:
             raise ValueError(f"Scene {scene} not supported")
 
