@@ -26,6 +26,10 @@ _log = logging.getLogger(__name__)
 msgpack_numpy.patch()
 
 
+class PlanningError(Exception):
+    """Raised when the tiptop server fails to produce a plan."""
+
+
 class TiptopWebsocketClient(InferenceClient):
     """Queries tiptop server once for a plan, then steps through it."""
 
@@ -86,6 +90,10 @@ class TiptopWebsocketClient(InferenceClient):
         self._gripper_action_steps_remaining = 0
         self._last_gripper_state = 0.0
         self._action_chunk_done = False
+        # Reconnect to get a fresh server-side handler (avoids stale cuTAMP state)
+        if self._ws is not None:
+            self._ws.close()
+        self._connect()
 
     def infer(self, obs: dict, instruction: str) -> dict:
         curr_obs = self._extract_observation(obs)
@@ -133,8 +141,10 @@ class TiptopWebsocketClient(InferenceClient):
                 else:
                     _log.info(f"  Step {i}: gripper {step['action']}")
         else:
-            _log.error(f"Tiptop server returned error: {response.get('error', 'unknown')}")
+            error_msg = response.get('error', 'unknown')
+            _log.error(f"Tiptop server returned error: {error_msg}")
             self._plan = []
+            raise PlanningError(error_msg)
 
     def _build_request(self, raw_obs: dict, curr_obs: dict, instruction: str) -> dict:
         wrist_rgb = curr_obs["wrist_image"]
