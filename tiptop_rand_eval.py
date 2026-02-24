@@ -139,6 +139,11 @@ def main(
             env.env.cfg.episode_length_s = orig_episode_length_s
             env.env.episode_length_buf[:] = 0
 
+            # Save snapshot of the scene after settling
+            snapshot = obs["policy"]["external_cam"][0].cpu().numpy()
+            snapshot_path = video_dir / f"tiptop_scene{scene}_rand{ep}_init.png"
+            cv2.imwrite(str(snapshot_path), cv2.cvtColor(snapshot, cv2.COLOR_RGB2BGR))
+
             video = []
             frame_idx = 0
             plan_failed = False
