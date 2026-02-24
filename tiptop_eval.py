@@ -130,23 +130,23 @@ def main(
         for ep in range(episodes):
             obs, _ = env.reset()
             frame_idx = 0
+            # Settle phase: run sim for ~1 second so objects settle into place
+            settle_steps = 15  # 15 steps at 15 Hz = 1 second
+            for _ in range(settle_steps):
+                hold_action = torch.cat([
+                    obs["policy"]["arm_joint_pos"],
+                    obs["policy"]["gripper_pos"],
+                ], dim=-1).unsqueeze(0)
+                obs, _, _, _, _ = env.step(hold_action)
+            env.env.episode_length_buf[:] = 0  # don't count settle steps toward episode length
+            plan_failed = False
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
-                ret = client.infer(obs, instruction)
-                # depth = wrist_cam.data.output["distance_to_image_plane"][0].cpu().numpy()
-                # rgb = wrist_cam.data.output["rgb"][0].cpu().numpy() 
-                # # extrinsics: T_world -> wrist_cam
-                # pos_w = wrist_cam.data.pos_w[0].cpu().numpy()
-                # quat_w_ros = wrist_cam.data.quat_w_ros[0].cpu().numpy()
-                # q_init = obs["policy"]["arm_joint_pos"].cpu().numpy()
-
-                # obs_path = os.path.expanduser("~/pi-sim-evals/tiptop_assets/tiptop_obs.h5")
-                # with h5py.File(obs_path, "w") as f:
-                #     f.create_dataset("depth", data=depth)
-                #     f.create_dataset("pos_w", data=pos_w)
-                #     f.create_dataset("quat_w_ros", data=quat_w_ros)
-                #     f.create_dataset("intrinsic_matrix", data=intrinsic_matrix)
-                #     f.create_dataset("rgb", data=rgb)
-                #     f.create_dataset("q_init", data=q_init)
+                try:
+                    ret = client.infer(obs, instruction)
+                except Exception as e:
+                    print(f"Inference failed for episode {ep+1}: {e}. Skipping.")
+                    plan_failed = True
+                    break
 
                 viz = np.concatenate([ret["right_image"], ret["wrist_image"]], axis=1)
                 viz = _add_top_padding(viz, pad_px=40)
@@ -156,7 +156,6 @@ def main(
                     cv2.imshow("Camera View", cv2.cvtColor(viz, cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
 
-                # video.append(ret["viz"])
                 video.append(viz)
                 frame_idx += 1
 
@@ -166,6 +165,9 @@ def main(
                     break
 
             client.reset()
+            if plan_failed:
+                video = []
+                continue
             mediapy.write_video(
                 video_dir / f"tiptop_scene{scene}_ep{ep}.mp4",
                 video,
