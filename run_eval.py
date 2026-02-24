@@ -58,8 +58,9 @@ def main(
         headless: bool = True,
         scene: int = 1,
         scene_variant: str = "",
-        policy: Literal["pi0.5", "pi0"] = "pi0.5",  
+        policy: Literal["pi0.5", "pi0"] = "pi0.5",
         seed: int = 42,
+        skip: tuple[int, ...] = (),
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -139,12 +140,15 @@ def main(
             task_completed = False
             frame_idx = 0
 
-            # Randomize object positions if seed is provided
+            # Randomize object positions if seed is provided (always advance RNG)
             if rng is not None and rand_cfg is not None:
                 positions = randomize_objects(
                     env, rand_cfg["objects"], rng,
                     rand_cfg["table_x"], rand_cfg["table_y"], rand_cfg["min_dist"],
                 )
+                if ep in skip:
+                    print(f"  Skipping episode {ep}")
+                    continue
                 for name, (x, y) in zip(rand_cfg["objects"], positions):
                     print(f"  {name}: ({x:.3f}, {y:.3f})")
 

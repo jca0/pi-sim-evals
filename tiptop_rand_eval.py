@@ -50,6 +50,7 @@ def main(
     scene: int = 2,
     episodes: int = 10,
     seed: int = 42,
+    skip: tuple[int, ...] = (),
     ws_host: str = "localhost",
     ws_port: int = 8765,
 ):
@@ -118,11 +119,14 @@ def main(
 
             obs, _ = env.reset()
 
-            # Randomize object positions
+            # Randomize object positions (always advance RNG to keep layouts deterministic)
             positions = randomize_objects(
                 env, cfg["objects"], rng,
                 cfg["table_x"], cfg["table_y"], cfg["min_dist"],
             )
+            if ep in skip:
+                print(f"  Skipping episode {ep}")
+                continue
             for name, (x, y) in zip(cfg["objects"], positions):
                 print(f"  {name}: ({x:.3f}, {y:.3f})")
 
