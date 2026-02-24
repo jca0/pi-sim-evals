@@ -103,7 +103,7 @@ def main(
             raise ValueError(f"Scene {scene} not supported")
         
     env_cfg.set_scene(f"{scene}{scene_variant}")
-    env_cfg.episode_length_s = 15.0 # LENGTH OF EPISODE
+    env_cfg.episode_length_s = 60.0 # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
     wrist_camera = env.env.scene["wrist_cam"]
     # intrinsics = wrist_camera.data.intrinsic_matrices[0].cpu().numpy()
