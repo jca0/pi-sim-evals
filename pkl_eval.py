@@ -224,6 +224,15 @@ def main(
     max_steps = env.env.max_episode_length
     with torch.no_grad():
         for ep in range(episodes):
+            # Settle phase: run sim for ~1 second so objects settle into place
+            settle_steps = 15  # 15 steps at 15 Hz = 1 second
+            for _ in range(settle_steps):
+                hold_action = torch.cat([
+                    obs["policy"]["arm_joint_pos"],
+                    obs["policy"]["gripper_pos"],
+                ], dim=-1).unsqueeze(0)
+                obs, _, _, _, _ = env.step(hold_action)
+            env.env.episode_length_buf[:] = 0  # don't count settle steps toward episode length
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 ret = client.infer(obs, instruction)
                 if not headless:
