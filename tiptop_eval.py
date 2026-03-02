@@ -147,6 +147,16 @@ def main(
             ep_gripper_positions = []
             ep_actions = []
 
+            # Settle phase: run sim for ~2 seconds so objects settle into place
+            settle_steps = int(2.0 * video_fps)
+            for _ in range(settle_steps):
+                hold_action = torch.cat([
+                    obs["policy"]["arm_joint_pos"],
+                    obs["policy"]["gripper_pos"],
+                ], dim=-1).unsqueeze(0)
+                obs, _, _, _, _ = env.step(hold_action)
+            env.env.episode_length_buf[:] = 0  # don't count settle steps toward episode length
+
             for i in tqdm(range(max_steps), desc=f"Episode {ep+1}/{episodes}"):
                 # Record observation BEFORE taking the action
                 if record:
