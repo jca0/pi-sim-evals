@@ -52,7 +52,8 @@ def _overlay_timer_ms(image, elapsed_ms: int) -> None:
 def main(
     episodes: int = 1,
     headless: bool = True,
-    scene: int = 1,
+    # scene: int = 1,
+    scene: str = "1",
     ws_host: str = "localhost",
     ws_port: int = 8765,
     record: bool = False,
@@ -63,7 +64,7 @@ def main(
     Args:
         episodes: Number of episodes to run
         headless: Run without GUI
-        scene: Scene number (1-6)
+        scene: Scene identifier, e.g. "1", "2", "2_rand1", "2_rand2"
         ws_host: Tiptop websocket server host
         ws_port: Tiptop websocket server port
         record: If True, save episode data in raw DROID format for finetuning
@@ -92,9 +93,11 @@ def main(
         use_fabric=True,
     )
 
-    # Get task instruction for scene
+    # Get task instruction for scene (extract base scene number, e.g. "2_rand1" -> 2)
+    # base_scene = scene  # uncomment when scene is int
+    base_scene = int(scene.split("_")[0])  # uncomment when scene is str
     instruction = None
-    match scene:
+    match base_scene:
         case 1:
             instruction = "put the cube in the bowl"
         case 2:
@@ -105,14 +108,14 @@ def main(
             # instruction = "pack the cans on top of the sugar box"
             instruction = "put the meat can on the sugar box"
         case 5:
-            instruction = "stack the cubes"
-        case 6:
             instruction = "put three cubes into the bowl"
+        case 6:
+            instruction = "stack the cubes"
         case _:
-            raise ValueError(f"Scene {scene} not supported")
+            raise ValueError(f"Scene {scene} (base {base_scene}) not supported")
 
     env_cfg.set_scene(scene)
-    env_cfg.episode_length_s = 45.0  # LENGTH OF EPISODE
+    env_cfg.episode_length_s = 60.0  # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
 
     obs, _ = env.reset()
@@ -159,7 +162,7 @@ def main(
                         obs["policy"]["arm_joint_pos"].cpu().numpy().astype(np.float64)
                     )
                     ep_gripper_positions.append(
-                        float(obs["policy"]["gripper_pos"].cpu().numpy())
+                        float(obs["policy"]["gripper_pos"].cpu().numpy().item())
                     )
 
                 ret = client.infer(obs, instruction)
@@ -167,6 +170,11 @@ def main(
                 # If tiptop failed to find a plan, skip rest of episode
                 if client._plan is not None and len(client._plan) == 0:
                     print(f"Plan failed, skipping episode {ep+1}")
+                    break
+
+                # Stop when the full trajectory has been executed
+                if client.plan_done:
+                    print(f"Plan fully executed at step {frame_idx}")
                     break
 
                 # Record the action that will be executed
@@ -192,13 +200,16 @@ def main(
             client.reset()
 
             # Save visualization video
-            mediapy.write_video(
-                video_dir / f"tiptop_scene{scene}_ep{ep}.mp4",
-                video,
-                fps=video_fps,
-            )
+            if video:
+                mediapy.write_video(
+                    video_dir / f"tiptop_scene{scene}_ep{ep}.mp4",
+                    video,
+                    fps=video_fps,
+                )
+                print(f"Saved video to {video_dir / f'tiptop_scene{scene}_ep{ep}.mp4'}")
+            else:
+                print(f"No frames recorded for episode {ep+1}, skipping video save")
             video = []
-            print(f"Saved video to {video_dir / f'tiptop_scene{scene}_ep{ep}.mp4'}")
 
             # Save episode in raw DROID format
             if record and len(ep_actions) > 0:

@@ -77,6 +77,17 @@ class TiptopWebsocketClient(InferenceClient):
                 _log.info("Waiting for tiptop server...")
                 time.sleep(5)
 
+    @property
+    def plan_done(self) -> bool:
+        """True when the full plan has been executed."""
+        if self._plan is None:
+            return False
+        if self._gripper_action_pending is not None:
+            return False
+        if self._current_trajectory is not None and self._current_waypoint_idx < len(self._current_trajectory):
+            return False
+        return self._current_plan_step >= len(self._plan)
+
     def reset(self) -> None:
         self._plan = None
         self._current_plan_step = 0
