@@ -37,11 +37,11 @@ def save_episode_droid_format(
     This produces data compatible with convert_droid_data_to_lerobot.py.
     """
     episode_dir.mkdir(parents=True, exist_ok=True)
-    T = len(joint_positions)
+    T = min(len(joint_positions), len(actions))
 
-    joint_pos_arr = np.array(joint_positions, dtype=np.float64)  # (T, 7)
-    gripper_pos_arr = np.array(gripper_positions, dtype=np.float64)  # (T,)
-    actions_arr = np.array(actions, dtype=np.float64)  # (T, 8)
+    joint_pos_arr = np.array(joint_positions[:T], dtype=np.float64)  # (T, 7)
+    gripper_pos_arr = np.array(gripper_positions[:T], dtype=np.float64)  # (T,)
+    actions_arr = np.array(actions[:T], dtype=np.float64)  # (T, 8)
 
     # Compute joint velocities from consecutive joint positions: v[t] = (pos[t+1] - pos[t]) * fps
     # For the last timestep, repeat the previous velocity.
