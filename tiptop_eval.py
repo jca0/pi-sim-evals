@@ -26,10 +26,48 @@ import gymnasium as gym
 import mediapy
 import torch
 import tyro
+from io import BytesIO
+from PIL import Image
 from tqdm import tqdm
 
 from src.inference.tiptop_websocket import TiptopWebsocketClient
 from src.recording import save_episode_droid_format, update_annotations
+
+
+def _check_success_gemini(ext_image: np.ndarray, instruction: str) -> bool:
+    """Call Gemini ER 1.5 to check if the task was completed successfully."""
+    from google import genai
+    from google.genai import types
+
+    api_key = os.getenv("GOOGLE_API_KEY")
+    client = genai.Client(api_key=api_key) if api_key else genai.Client()
+
+    if ext_image.dtype != np.uint8:
+        if np.issubdtype(ext_image.dtype, np.floating) and ext_image.max() <= 1.0:
+            ext_image = ext_image * 255.0
+        ext_image = np.clip(ext_image, 0, 255).astype(np.uint8)
+    buf = BytesIO()
+    Image.fromarray(ext_image).save(buf, format="PNG")
+    ext_bytes = buf.getvalue()
+
+    prompt = (
+        "Given this external camera image and the task instruction, "
+        "determine if the task is complete. "
+        "Return only one word: true if the task is complete, false otherwise. "
+        "Add a short one sentence explanation for your answer."
+        f"\n\nTask: {instruction}"
+    )
+
+    response = client.models.generate_content(
+        model="gemini-robotics-er-1.5-preview",
+        contents=[
+            types.Part.from_bytes(data=ext_bytes, mime_type="image/png"),
+            prompt,
+        ],
+    )
+    text = (response.text or "").strip().lower()
+    print(f"Gemini success check: {response.text}")
+    return text.startswith("true")
 
 
 def _add_top_padding(image, pad_px: int = 40):
@@ -221,8 +259,16 @@ def main(
                 print(f"No frames recorded for episode {ep+1}, skipping video save")
             video = []
 
-            # Save episode in raw DROID format
+            # Check task success with Gemini before saving recording
+            ep_success = True
             if record and len(ep_actions) > 0:
+                last_ext_frame = obs["policy"]["external_cam"][0].cpu().numpy()
+                ep_success = _check_success_gemini(last_ext_frame, instruction)
+                if not ep_success:
+                    print(f"Gemini says task not completed — skipping recording for episode {ep+1}")
+
+            # Save episode in raw DROID format
+            if record and len(ep_actions) > 0 and ep_success:
                 ts = datetime.now()
                 # UUID must not contain underscores — the conversion script
                 # extracts it from "metadata_<uuid>.json" by splitting on "_".
