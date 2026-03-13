@@ -148,6 +148,10 @@ def main(
                     plan_failed = True
                     break
 
+                if client.plan_done:
+                    print(f"Plan fully executed at step {frame_idx}")
+                    break
+
                 viz = np.concatenate([ret["right_image"], ret["wrist_image"]], axis=1)
                 viz = _add_top_padding(viz, pad_px=40)
                 elapsed_ms = int(frame_idx * 1000 / video_fps)
