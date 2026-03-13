@@ -1,6 +1,24 @@
 # DROID Sim Evaluation
 
-**Note:** The current simulator works best for policies trained with *joint position* action space (and *not* joint velocity control). 
+This repository contains scripts for evaluating DROID policies in a simple ISAAC Sim environment.
+
+Here is an example rollout of a pi0-FAST-DROID policy:
+
+Scene 1
+
+![Scene 1](./docs/scene1.gif)
+
+Scene 2
+
+![Scene 2](./docs/scene2.gif)
+
+Scene 3
+
+![Scene 3](./docs/scene3.gif)
+
+The simulation is tuned to work *zero-shot* with DROID policies trained on the real-world DROID dataset, so no separate simulation data is required.
+
+**Note:** The current simulator works best for policies trained with *joint position* action space (and *not* joint velocity control). We provide examples for evaluating pi0-FAST-DROID policies trained with joint position control below.
 
 
 ## Installation
@@ -26,19 +44,17 @@ source .venv/bin/activate
 
 ## Quick Start
 
-First, make sure you download the simulation assets and unpack them into the root directory of this package.
-Using the [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html), this can be done with:
+First, make sure you download the simulation assets into the root of this directory
 ```bash
-curl -O https://pi-sim-assets.s3.us-east-1.amazonaws.com/assets.zip 
-unzip assets.zip
+uvx hf download owhan/DROID-sim-environments --repo-type dataset --local-dir assets
 ```
 
 Then, in a separate terminal, launch the policy server on `localhost:8000`. 
 
 For example, to launch a pi0-FAST-DROID policy (with joint position control),
-checkout [openpi](https://github.com/Physical-Intelligence/openpi/tree/karl/droid_policies) to the `karl/droid_policies` branch and run the command below in a separate terminal
+checkout [openpi](https://github.com/Physical-Intelligence/openpi) and use the `polaris` configs 
 ```bash
-XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi0_fast_droid_jointpos --policy.dir=s3://openpi-assets-simeval/pi0_fast_droid_jointpos
+XLA_PYTHON_CLIENT_MEM_FRACTION=0.5 uv run scripts/serve_policy.py policy:checkpoint --policy.config=pi05_droid_jointpos_polaris --policy.dir=gs://openpi-assets/checkpoints/pi05_droid_jointpos
 ```
 
 To launch a pi0.5-DROID policy, checkout [openpi](https://github.com/Physical-Intelligence/openpi/tree/main) to the `main` branch and run the command below in a separate terminal
