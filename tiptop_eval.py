@@ -25,23 +25,7 @@ import tyro
 from tqdm import tqdm
 
 from src.inference.tiptop_websocket import TiptopWebsocketClient
-
-
-def _add_top_padding(image, pad_px: int = 40):
-    if pad_px <= 0:
-        return image
-    h, w = image.shape[:2]
-    padded = np.zeros((h + pad_px, w, 3), dtype=image.dtype)
-    padded[pad_px:, :, :] = image
-    return padded
-
-
-def _overlay_timer_ms(image, elapsed_ms: int) -> None:
-    text = f"t={elapsed_ms} ms"
-    org = (10, 28)
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(image, text, org, font, 0.8, (0, 0, 0), 3, cv2.LINE_AA)
-    cv2.putText(image, text, org, font, 0.8, (255, 255, 255), 1, cv2.LINE_AA)
+from src.visual_utils import add_top_padding, overlay_timer_ms
 
 
 def main(
@@ -103,8 +87,6 @@ def main(
 
     obs, _ = env.reset()
     obs, _ = env.reset()  # Need second render cycle to get correctly loaded materials
-    wrist_cam = env.env.scene["wrist_cam"]
-    intrinsic_matrix = wrist_cam.data.intrinsic_matrices[0].cpu().numpy()
 
     # Connect to tiptop websocket server
     print(f"Connecting to tiptop server at ws://{ws_host}:{ws_port}...")
@@ -143,9 +125,9 @@ def main(
                     break
 
                 viz = np.concatenate([ret["right_image"], ret["wrist_image"]], axis=1)
-                viz = _add_top_padding(viz, pad_px=40)
+                viz = add_top_padding(viz, pad_px=40)
                 elapsed_ms = int(frame_idx * 1000 / video_fps)
-                _overlay_timer_ms(viz, elapsed_ms)
+                overlay_timer_ms(viz, elapsed_ms)
                 if not headless:
                     cv2.imshow("Camera View", cv2.cvtColor(viz, cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
