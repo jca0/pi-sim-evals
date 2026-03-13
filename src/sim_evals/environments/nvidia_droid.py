@@ -15,7 +15,7 @@ import numpy as np
 import math
 import torch
 
-ASSET_PATH = Path(__file__).parent / "../../assets"
+ASSET_PATH = Path(__file__).parent / "../../../assets"
 
 NVIDIA_DROID = ArticulationCfg(
         prim_path="{ENV_REGEX_NS}/robot",
