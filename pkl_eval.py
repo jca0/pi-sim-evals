@@ -164,6 +164,7 @@ def main(
         episodes:int = 1,
         headless: bool = True,
         scene: int = 1,
+        variant: int = 0,
         pkl_path: str = os.path.expanduser("~/pi-sim-evals/tiptop_assets/tiptop_traj.pkl"),
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
@@ -199,13 +200,11 @@ def main(
         case 4: 
             instruction = "put the meat can on the sugar box"
         case 5:
-            instruction = "rearrange the cubes so that they spell 'REX'"
-        case 6:
-            instruction = "stack all the cubes on top of each other"
+            instruction = "put three cubes into the bowl"
         case _:
             raise ValueError(f"Scene {scene} not supported")
         
-    env_cfg.set_scene(scene)
+    env_cfg.set_scene(f"{scene}_{variant}")
     env_cfg.episode_length_s = 30.0 # LENGTH OF EPISODE
     env = gym.make("DROID", cfg=env_cfg)
 
