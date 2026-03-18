@@ -2,7 +2,9 @@
 data/
 runs/
 assets/
-
+submodules/
+recordings/
+.gradio/
 
 
 # Byte-compiled / optimized / DLL files
