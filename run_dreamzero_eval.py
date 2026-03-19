@@ -34,7 +34,7 @@ from tqdm import tqdm
 
 from openpi_client import image_tools
 from sim_evals.inference.abstract_client import InferenceClient
-from policy_client import WebsocketClientPolicy
+from dreamzero_eval_utils.policy_client import WebsocketClientPolicy
 
 
 class DreamZeroJointPosClient(InferenceClient):
@@ -142,8 +142,8 @@ def main(
         episodes: int = 10,
         scene: int = 1,
         headless: bool = True,
-        host: str = "localhost",
-        port: int = 6000,
+        host: str = "161.35.110.36",
+        port: int = 16788,
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -175,6 +175,10 @@ def main(
             instruction = "pick up the can and put it in the mug"
         case 3:
             instruction = "put the banana in the bin"
+        case 4:
+            instruction = "put the mug on top of the sugar box"
+        case 5:
+            instruction = "grasp a cube"
         case _:
             raise ValueError(f"Scene {scene} not supported")
         

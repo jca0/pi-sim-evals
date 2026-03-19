@@ -12,10 +12,10 @@ that checkpoint and runs inference; it is the correct policy class for DreamZero
 
 Usage (single GPU):
 
-  torchrun --nproc_per_node=1 eval_utils/serve_dreamzero_wan22.py --model_path ./checkpoints/dreamzero_droid_wan22_smoke --port 8000
+  torchrun --nproc_per_node=1 dreamzero_eval_utils/serve_dreamzero_wan22.py --model_path ./checkpoints/dreamzero_droid_wan22_smoke --port 8000
 
   # Or single process:
-  python eval_utils/serve_dreamzero_wan22.py --model_path ./checkpoints/dreamzero_droid_wan22_smoke --port 8000
+  python dreamzero_eval_utils/serve_dreamzero_wan22.py --model_path ./checkpoints/dreamzero_droid_wan22_smoke --port 8000
 
 Client: send observations per PolicyServerConfig (policy_server.py). Video is resized to the
 checkpoint's expected resolution (e.g. 180×320) so the eval transform accepts it; the 5B action
@@ -61,7 +61,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from openpi_client.base_policy import BasePolicy
 
-from eval_utils.policy_server import WebsocketPolicyServer, PolicyServerConfig
+from dreamzero_eval_utils.policy_server import WebsocketPolicyServer, PolicyServerConfig
 from groot.vla.model.n1_5.sim_policy import GrootSimPolicy
 from groot.vla.data.schema import EmbodimentTag
 from groot.vla.data.transform import ComposedModalityTransform
