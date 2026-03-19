@@ -32,9 +32,10 @@ from sim_evals.inference.droid_jointpos import Client as DroidJointPosClient
 
 
 def main(
-        episodes:int = 10,
+        episodes:int = 1,
         headless: bool = True,
         scene: int = 1,
+        length: int = 30,
         ):
     # launch omniverse app with arguments (inside function to prevent overriding tyro)
     from isaaclab.app import AppLauncher
@@ -66,9 +67,14 @@ def main(
             instruction = "put the can in the mug"
         case 3:
             instruction = "put banana in the bin"
+        case 4:
+            instruction = "put the mug on top of the sugar box"
+        case 5:
+            instruction = "pick up one cube and keep it in your hand"
         case _:
             raise ValueError(f"Scene {scene} not supported")
         
+    env_cfg.episode_length_s = length
     env_cfg.set_scene(scene)
     env = gym.make("DROID", cfg=env_cfg)
 
