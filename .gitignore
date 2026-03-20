@@ -4,7 +4,9 @@ runs/
 assets/
 submodules/
 recordings/
+calibration_logs/
 .gradio/
+.claude/
 
 
 # Byte-compiled / optimized / DLL files
