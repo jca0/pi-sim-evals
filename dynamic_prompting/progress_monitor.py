@@ -1,11 +1,10 @@
 """
 Progress monitor that uses a VLM (Google Gemini) to check whether
-a robot subtask has been completed, based on recent camera frames.
+a robot subtask has been completed, based on the current camera frame.
 """
 
 import os
 import json
-from pathlib import Path
 
 import numpy as np
 from PIL import Image
@@ -15,13 +14,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL_ID = "gemini-2.0-flash"
+MODEL_ID = "gemini-2.5-flash"
 
-COMPLETION_PROMPT_TEMPLATE = """You are a robot task completion checker. You are given {n_frames} frames from a robot's camera, ordered chronologically (earliest to latest).
+COMPLETION_PROMPT_TEMPLATE = """You are a robot task completion checker. You are given a single frame from a robot's camera.
 
 The robot's current subtask is: "{subtask}"
 
-Based on these frames, determine whether the subtask has been completed.
+Based on this frame, determine whether the subtask has been completed.
 
 Respond with JSON only, no markdown:
 {{"completed": true/false, "reason": "brief explanation"}}"""
@@ -33,13 +32,11 @@ class ProgressMonitor:
     def __init__(
         self,
         check_every_n_steps: int = 15,
-        n_frames: int = 4,
         model_id: str = MODEL_ID,
     ):
         """
         Args:
             check_every_n_steps: How often (in env steps) to query the VLM.
-            n_frames: Number of recent frames to send per check.
             model_id: Gemini model to use.
         """
         api_key = os.getenv("GOOGLE_API_KEY")
@@ -49,28 +46,23 @@ class ProgressMonitor:
         self.client = genai.Client(api_key=api_key)
         self.model_id = model_id
         self.check_every_n_steps = check_every_n_steps
-        self.n_frames = n_frames
-
-        self._frame_buffer: list[np.ndarray] = []
         self._step_count = 0
+        self._latest_frame: np.ndarray | None = None
 
     def reset(self):
-        self._frame_buffer = []
         self._step_count = 0
+        self._latest_frame = None
 
-    def add_frame(self, frame: np.ndarray):
-        """Buffer a camera frame (H, W, 3 uint8 RGB)."""
-        self._frame_buffer.append(frame)
-        # Only keep enough frames for the next check
-        if len(self._frame_buffer) > self.n_frames:
-            self._frame_buffer.pop(0)
+    def set_frame(self, frame: np.ndarray):
+        """Store the current camera frame (H, W, 3 uint8 RGB)."""
+        self._latest_frame = frame
 
     def should_check(self) -> bool:
         """Returns True if it's time to query the VLM."""
         self._step_count += 1
         return (
             self._step_count % self.check_every_n_steps == 0
-            and len(self._frame_buffer) >= self.n_frames
+            and self._latest_frame is not None
         )
 
     def check_completion(self, subtask: str) -> dict:
@@ -83,22 +75,15 @@ class ProgressMonitor:
         Returns:
             {"completed": bool, "reason": str}
         """
-        frames = self._frame_buffer[-self.n_frames :]
-        prompt = COMPLETION_PROMPT_TEMPLATE.format(
-            n_frames=len(frames), subtask=subtask
-        )
+        prompt = COMPLETION_PROMPT_TEMPLATE.format(subtask=subtask)
 
-        # Convert frames to image parts
-        parts = []
-        for frame in frames:
-            img = Image.fromarray(frame)
-            img_bytes = _image_to_bytes(img)
-            parts.append(types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"))
-        parts.append(prompt)
+        img = Image.fromarray(self._latest_frame)
+        img_bytes = _image_to_bytes(img)
+        image_part = types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")
 
         response = self.client.models.generate_content(
             model=self.model_id,
-            contents=parts,
+            contents=[image_part, prompt],
             config=types.GenerateContentConfig(temperature=0.0),
         )
 

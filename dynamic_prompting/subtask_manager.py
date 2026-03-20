@@ -7,7 +7,27 @@ through them based on progress monitor feedback.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+
+import os
+import json
+from dataclasses import dataclass
+
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DECOMPOSITION_PROMPT = """You are a robot task planner. A robot arm needs to perform the following task:
+
+"{instruction}"
+
+Break this down into a short ordered list of atomic subtasks that a robot arm would execute sequentially. Each subtask should be a simple, single action (e.g. "pick up the cube", "move to the bowl", "place the cube in the bowl").
+
+Keep it minimal — only include subtasks that are necessary. Typically 2-4 subtasks.
+
+Respond with JSON only, no markdown:
+{{"subtasks": ["subtask 1", "subtask 2", ...]}}"""
 
 
 @dataclass
@@ -21,6 +41,45 @@ class SubtaskPlan:
     """An ordered sequence of subtasks that together accomplish a high-level task."""
     high_level_instruction: str
     subtasks: list[Subtask]
+
+
+def decompose_task(instruction: str, model_id: str = "gemini-2.5-flash") -> SubtaskPlan:
+    """
+    Use Gemini to break a high-level instruction into atomic subtasks.
+
+    Args:
+        instruction: High-level task description (e.g. "put the cube in the bowl").
+        model_id: Gemini model to use for decomposition.
+
+    Returns:
+        A SubtaskPlan with the generated subtasks.
+    """
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY not found in environment")
+
+    client = genai.Client(api_key=api_key)
+    prompt = DECOMPOSITION_PROMPT.format(instruction=instruction)
+
+    response = client.models.generate_content(
+        model=model_id,
+        contents=prompt,
+        config=types.GenerateContentConfig(temperature=0.0),
+    )
+
+    text = response.text.strip()
+    # Strip markdown fences if present
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1]
+        text = text.rsplit("```", 1)[0]
+
+    result = json.loads(text)
+    subtask_strs = result["subtasks"]
+
+    return SubtaskPlan(
+        high_level_instruction=instruction,
+        subtasks=[Subtask(instruction=s) for s in subtask_strs],
+    )
 
 
 class SubtaskManager:
@@ -89,45 +148,3 @@ class SubtaskManager:
             f'"{self.current_instruction()}" '
             f"(step {self._subtask_step_count})"
         )
-
-
-# ── Pre-defined task plans ──────────────────────────────────────────────
-# Add or modify these to match your scenes.
-# Each plan maps a high-level instruction to an ordered list of subtasks.
-
-TASK_PLANS: dict[int, SubtaskPlan] = {
-    1: SubtaskPlan(
-        high_level_instruction="put the cube in the bowl",
-        subtasks=[
-            Subtask("pick up the cube"),
-            Subtask("place the cube in the bowl"),
-        ],
-    ),
-    2: SubtaskPlan(
-        high_level_instruction="pick up the can and put it in the mug",
-        subtasks=[
-            Subtask("pick up the can"),
-            Subtask("place the can in the mug"),
-        ],
-    ),
-    3: SubtaskPlan(
-        high_level_instruction="put the banana in the bin",
-        subtasks=[
-            Subtask("pick up the banana"),
-            Subtask("place the banana in the bin"),
-        ],
-    ),
-    4: SubtaskPlan(
-        high_level_instruction="put the mug on top of the sugar box",
-        subtasks=[
-            Subtask("pick up the mug"),
-            Subtask("place the mug on top of the sugar box"),
-        ],
-    ),
-    5: SubtaskPlan(
-        high_level_instruction="grasp a cube",
-        subtasks=[
-            Subtask("grasp a cube"),
-        ],
-    ),
-}
