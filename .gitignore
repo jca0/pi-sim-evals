@@ -2,8 +2,11 @@
 data/
 runs/
 assets/
-
-
+calibration_logs/
+recordings/
+submodules/
+.claude/
+.gradio/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
