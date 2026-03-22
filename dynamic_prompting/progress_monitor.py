@@ -34,11 +34,6 @@ class ProgressMonitor:
         check_every_n_steps: int = 15,
         model_id: str = MODEL_ID,
     ):
-        """
-        Args:
-            check_every_n_steps: How often (in env steps) to query the VLM.
-            model_id: Gemini model to use.
-        """
         api_key = os.getenv("GOOGLE_API_KEY")
         if not api_key:
             raise ValueError("GOOGLE_API_KEY not found in environment")
@@ -66,15 +61,6 @@ class ProgressMonitor:
         )
 
     def check_completion(self, subtask: str) -> dict:
-        """
-        Query the VLM to determine if the subtask is complete.
-
-        Args:
-            subtask: Natural language description of the current subtask.
-
-        Returns:
-            {"completed": bool, "reason": str}
-        """
         prompt = COMPLETION_PROMPT_TEMPLATE.format(subtask=subtask)
 
         img = Image.fromarray(self._latest_frame)

@@ -95,7 +95,7 @@ def main(
 
             # Decompose this variation into subtasks
             plan = decompose_task(var_instruction)
-            subtask_strs = [s.instruction for s in plan.subtasks]
+            subtask_strs = plan.subtasks
             print(f"  Subtasks: {subtask_strs}")
 
             manager = SubtaskManager(plan)
@@ -120,7 +120,6 @@ def main(
 
                 if not manager.is_done():
                     monitor.set_frame(last_frame)
-                    manager.step()
 
                     if monitor.should_check():
                         result = monitor.check_completion(current_instruction)
@@ -129,9 +128,6 @@ def main(
                             manager.advance()
                             if manager.is_done():
                                 print("  All subtasks completed")
-                        elif manager.exceeded_subtask_limit():
-                            print(f"  Subtask timed out: {manager.status()}")
-                            manager.advance()
 
                 if term or trunc:
                     break

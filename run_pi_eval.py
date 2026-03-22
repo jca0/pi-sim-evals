@@ -95,7 +95,7 @@ def main(
     monitor = None
     if dynamic_prompting:
         plan = decompose_task(instruction)
-        print(f"Task decomposition: {[s.instruction for s in plan.subtasks]}")
+        print(f"Task decomposition: {plan.subtasks}")
         manager = SubtaskManager(plan)
         monitor = ProgressMonitor(
             check_every_n_steps=check_every_n_steps,
@@ -134,8 +134,6 @@ def main(
                 if manager and monitor and not manager.is_done():
                     frame = obs["policy"]["external_cam"][0].cpu().numpy()
                     monitor.set_frame(frame)
-                    manager.step()
-
                     if monitor.should_check():
                         result = monitor.check_completion(current_instruction)
                         if result["completed"]:
@@ -143,9 +141,6 @@ def main(
                             manager.advance()
                             if manager.is_done():
                                 print("All subtasks completed")
-                        elif manager.exceeded_subtask_limit():
-                            print(f"Timed out: {manager.status()}")
-                            manager.advance()
 
                 if term or trunc:
                     break
