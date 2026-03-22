@@ -1,6 +1,7 @@
 """
-Calibration script: generate prompt variations for a scene, roll each one out
-with dynamic prompting, judge success, and save results.
+Calibration script: generate subtask decomposition variations for a scene,
+roll each one out with dynamic prompting, and log which subtask prompts
+succeed or fail.
 
 Usage:
     python run_calibration.py --scene 1 --n-variations 5 --headless
@@ -19,11 +20,10 @@ from pathlib import Path
 from tqdm import tqdm
 
 from sim_evals.inference.droid_jointpos import Client as DroidJointPosClient
-from dynamic_prompting.subtask_manager import SubtaskManager, decompose_task
+from dynamic_prompting.subtask_manager import SubtaskManager
 from dynamic_prompting.progress_monitor import ProgressMonitor
 from dynamic_prompting.prompt_calibration import (
-    generate_prompt_variations,
-    judge_success,
+    generate_decomposition_variations,
     CalibrationLog,
 )
 
@@ -44,7 +44,6 @@ def main(
     headless: bool = True,
     length: int = 30,
     check_every_n_steps: int = 15,
-    include_original: bool = True,
 ):
     from isaaclab.app import AppLauncher
     parser = argparse.ArgumentParser()
@@ -63,14 +62,12 @@ def main(
 
     base_instruction = SCENE_INSTRUCTIONS[scene]
 
-    # Generate prompt variations
-    print(f"Generating {n_variations} prompt variations for: \"{base_instruction}\"")
-    variations = generate_prompt_variations(base_instruction, n=n_variations)
-    if include_original:
-        variations = [base_instruction] + variations
-    print(f"Testing {len(variations)} prompts:")
-    for i, v in enumerate(variations):
-        print(f"  [{i}] {v}")
+    # Generate decomposition variations
+    print(f"Generating {n_variations} decomposition variations for: \"{base_instruction}\"")
+    plans = generate_decomposition_variations(base_instruction, n=n_variations)
+    print(f"Testing {len(plans)} decompositions:")
+    for i, plan in enumerate(plans):
+        print(f"  [{i}] {plan.subtasks}")
 
     # Setup env
     env_cfg = parse_env_cfg("DROID", device=args_cli.device, num_envs=1, use_fabric=True)
@@ -88,25 +85,17 @@ def main(
     max_steps = env.env.max_episode_length
 
     with torch.no_grad():
-        for var_idx, var_instruction in enumerate(variations):
+        for plan_idx, plan in enumerate(plans):
             print(f"\n{'='*60}")
-            print(f"[{var_idx+1}/{len(variations)}] Testing: \"{var_instruction}\"")
+            print(f"[{plan_idx+1}/{len(plans)}] Subtasks: {plan.subtasks}")
             print(f"{'='*60}")
-
-            # Decompose this variation into subtasks
-            plan = decompose_task(var_instruction)
-            subtask_strs = plan.subtasks
-            print(f"  Subtasks: {subtask_strs}")
 
             manager = SubtaskManager(plan)
             monitor = ProgressMonitor(check_every_n_steps=check_every_n_steps)
             video = []
-            last_frame = None
 
-            for step in tqdm(range(max_steps), desc=f"Variation {var_idx+1}"):
-                current_instruction = var_instruction
-                if not manager.is_done():
-                    current_instruction = manager.current_instruction()
+            for step in tqdm(range(max_steps), desc=f"Decomposition {plan_idx+1}"):
+                current_instruction = manager.current_instruction()
 
                 ret = client.infer(obs, current_instruction)
                 if not headless:
@@ -116,15 +105,20 @@ def main(
                 action = torch.tensor(ret["action"])[None]
                 obs, _, term, trunc, _ = env.step(action)
 
-                last_frame = obs["policy"]["external_cam"][0].cpu().numpy()
-
                 if not manager.is_done():
-                    monitor.set_frame(last_frame)
+                    frame = obs["policy"]["external_cam"][0].cpu().numpy()
+                    monitor.set_frame(frame)
 
                     if monitor.should_check():
                         result = monitor.check_completion(current_instruction)
                         if result["completed"]:
                             print(f"  Subtask completed: {manager.status()} | {result['reason']}")
+                            cal_log.log_subtask_result(
+                                scene=scene,
+                                subtask_prompt=current_instruction,
+                                completed=True,
+                                reason=result["reason"],
+                            )
                             manager.advance()
                             if manager.is_done():
                                 print("  All subtasks completed")
@@ -132,24 +126,19 @@ def main(
                 if term or trunc:
                     break
 
-            # Judge overall success from final frame
-            verdict = judge_success(last_frame, base_instruction)
-            status = "SUCCESS" if verdict["success"] else "FAIL"
-            print(f"  Result: [{status}] {verdict['reason']}")
+            # Log remaining incomplete subtasks as failed
+            while not manager.is_done():
+                cal_log.log_subtask_result(
+                    scene=scene,
+                    subtask_prompt=manager.current_instruction(),
+                    completed=False,
+                    reason="episode ended before completion",
+                )
+                manager.advance()
 
             # Save video
-            video_path = video_dir / f"var_{var_idx}_{status.lower()}.mp4"
+            video_path = video_dir / f"decomp_{plan_idx}.mp4"
             mediapy.write_video(video_path, video, fps=15)
-
-            # Log result
-            cal_log.save_result(
-                scene=scene,
-                instruction=var_instruction,
-                subtasks=subtask_strs,
-                success=verdict["success"],
-                reason=verdict["reason"],
-                video_path=str(video_path),
-            )
 
             # Reset for next variation
             client.reset()
