@@ -66,6 +66,10 @@ def main(
             instruction = "put the can in the mug"
         case 3:
             instruction = "put banana in the bin"
+        case 4:
+            instruction = "put the mug on top of the sugar box"
+        case 5:
+            instruction = "put 3 cubes into the bowl and then take 1 cube out of the bowl"
         case _:
             raise ValueError(f"Scene {scene} not supported")
         
