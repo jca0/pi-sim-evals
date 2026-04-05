@@ -24,7 +24,7 @@ import torch
 import tyro
 from tqdm import tqdm
 
-from src.inference.tiptop_websocket import TiptopWebsocketClient
+from src.sim_evals.inference.tiptop_websocket import TiptopWebsocketClient
 from src.visual_utils import add_top_padding, overlay_timer_ms
 
 
@@ -56,7 +56,7 @@ def main(
     app_launcher = AppLauncher(args_cli)
     simulation_app = app_launcher.app
 
-    import src.environments  # noqa: F401
+    import src.sim_evals.environments  # noqa: F401
     from isaaclab_tasks.utils import parse_env_cfg
 
     env_cfg = parse_env_cfg(
@@ -81,7 +81,7 @@ def main(
         case _:
             raise ValueError(f"Scene {scene} not supported")
 
-    env_cfg.set_scene(f"{scene}_{variant}")
+    env_cfg.set_scene(str(scene))
     env_cfg.episode_length_s = 90.0
     env = gym.make("DROID", cfg=env_cfg)
 
